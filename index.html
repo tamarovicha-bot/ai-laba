@@ -208,6 +208,8 @@ details.prev summary::-webkit-details-marker { display: none; }
 @media (prefers-reduced-motion: reduce) { .sheet, .backdrop, .toast { transition: none; } .screen { scroll-behavior: auto; } }
 html.tg body { background: var(--bg2); }
 html.tg .phone { width: 100vw; height: var(--tg-viewport-stable-height, 100vh); border-radius: 0; border: 0; box-shadow: none; }
+html.tg .brand b { display: none; }
+html.tg .brand small { font-size: 13.5px; }
 .boot { flex: 1; display: grid; place-items: center; min-height: 60%; padding: 40px 24px; text-align: center; color: var(--hint); font-size: 15px; line-height: 1.45; }
 .boot b { display: block; color: var(--ink); font-size: 17px; margin-bottom: 6px; }
 </style>
@@ -709,12 +711,12 @@ function applyData(data, user) {
 }
 async function refresh() { try { const r = await api("load"); if (r.ok) applyData(r.data, r.user); } catch (e) { /* keep current view */ } }
 async function start() {
+  const sp = tg && tg.initDataUnsafe ? tg.initDataUnsafe.start_param : null;
   if (tg) {
     tg.ready(); tg.expand();
     document.documentElement.dataset.theme = tg.colorScheme;
     tg.onEvent("themeChanged", () => { document.documentElement.dataset.theme = tg.colorScheme; });
     tg.BackButton.onClick(closeSheet);
-    const sp = tg.initDataUnsafe && tg.initDataUnsafe.start_param;
     if (sp && TABS.includes(sp)) S.tab = sp;
   }
   header(); tabs();
@@ -729,6 +731,8 @@ async function start() {
       return;
     }
     applyData(r.data, r.user);
+    /* «Открыть задачи» from a reminder: show the person's own open tasks when there are any */
+    if (sp === "tasks" && S.me && myTasks(S.me).some(t => !doneOf(t))) { S.seg = "mine"; render(); }
     /* deep links for review: ?seg=hands&day=2026-10-14&tool=2&scroll=600&sheet=r2&pick=1 */
     if (params.get("seg")) { S.seg = params.get("seg"); render(); }
     if (params.get("day")) { S.day = params.get("day"); render(); }
