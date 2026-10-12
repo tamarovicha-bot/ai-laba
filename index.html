@@ -212,6 +212,11 @@ html.tg .brand b { display: none; }
 html.tg .brand small { font-size: 13.5px; }
 .boot { flex: 1; display: grid; place-items: center; min-height: 60%; padding: 40px 24px; text-align: center; color: var(--hint); font-size: 15px; line-height: 1.45; }
 .boot b { display: block; color: var(--ink); font-size: 17px; margin-bottom: 6px; }
+.top { flex-wrap: wrap; row-gap: 8px; }
+.meet { flex: 1 0 100%; display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 12px; border-radius: 12px; background: var(--bg2); }
+.meet[hidden] { display: none; }
+.meet-t { flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.3; color: var(--ink); }
+.meet .btn { flex: none; display: inline-flex; align-items: center; min-height: 32px; text-decoration: none; }
 </style>
 </head>
 <body>
@@ -219,6 +224,7 @@ html.tg .brand small { font-size: 13.5px; }
   <header class="top">
     <div class="brand"><b>AI laba</b><small id="sub"></small></div>
     <button class="viewer" id="viewerBtn" data-act="viewer-open" aria-haspopup="dialog"></button>
+    <div class="meet" id="meet" hidden></div>
   </header>
   <main class="screen" id="screen"></main>
   <nav class="tabs" id="tabs" aria-label="Разделы"></nav>
@@ -338,6 +344,9 @@ const KIND = { lab: ["Лаба", "p-accent", "k-lab"], deadline: ["Подача"
 const $ = id => document.getElementById(id);
 function header() {
   $("sub").textContent = D && D.meta && D.meta.export_until ? `задачи сейчас · чат на ${fLong(dTime(D.meta.export_until))}` : "портал Лабы";
+  const meet = D && D.meeting, mt = $("meet");
+  mt.hidden = !(meet && meet.text && meet.link);
+  mt.innerHTML = mt.hidden ? "" : `<div class="meet-t">${esc(meet.text)}</div><a class="btn primary" href="${esc(meet.link)}" target="_blank" rel="noopener">Телемост</a>`;
   const v = S.viewer;
   $("viewerBtn").innerHTML = v === "all"
     ? `<span class="ava all">Л</span><span>Вся Лаба</span><span class="caret">▾</span>`
@@ -429,13 +438,13 @@ function homeRibbon() {
     </div></section>`;
 }
 function homeDecisions() {
-  const dec = D.decisions, m = D.meeting;
+  const dec = D.decisions;
   if (!dec || !dec.date || !dec.items || !dec.items.length) return "";
   const d = dOnly(dec.date);
   return `<section class="sec"><div class="sec-h"><span>Решено на встрече ${fLong(d)}</span></div>
     <div class="card">${dec.items.map(x => `<div class="row"><div class="grow"><div class="t"><b>${esc(x.title)}</b></div>
       <div class="m" style="color:var(--ink);opacity:.86">${esc(x.text)}</div><div class="links">${ext(x.links[0], "В чате")}</div></div></div>`).join("")}
-    ${m ? `<div class="row"><div class="grow"><div class="t">${esc(m.text)}</div><div class="m">Ссылка постоянная</div></div><a class="btn" href="${esc(m.link)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Телемост</a></div>` : ""}</div></section>`;
+    </div></section>`;
 }
 function homeProjects() {
   const rows = D.projects.map(p => {
@@ -452,16 +461,8 @@ function homeProjects() {
   }).join("");
   return `<section class="sec"><div class="sec-h"><span>Проекты · ${D.projects.length}</span>${ext(D.meta.sheet_url, "Таблица").replace("<a ", '<a class="act" ')}</div><div class="card">${rows}</div></section>`;
 }
-function homePulse() {
-  const top = (D.pulse || []).slice(0, 6), max = Math.max(1, ...top.map(p => p.n7));
-  if (!top.length) return "";
-  return `<section class="sec"><div class="sec-h"><span>Где идёт разговор · 7 дней</span></div><div class="card">
-    ${top.map(p => `<a class="row tap" href="${esc(p.link)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;align-items:center">
-      <div style="width:150px" class="t">${esc(p.title)}</div><div class="bar-track"><div class="bar" style="width:${Math.max(6, p.n7 / max * 100)}%"></div></div>
-      <span class="num m" style="width:28px;text-align:right;margin:0">${p.n7}</span></a>`).join("")}</div></section>`;
-}
 function renderHome() {
-  return homeAttention() + homeRibbon() + homeDecisions() + homeProjects() + homePulse() +
+  return homeAttention() + homeRibbon() + homeDecisions() + homeProjects() +
     `<p class="foot">Задачи и проекты берутся из «Таблицы задач и проектов Лабы» при каждом открытии. Решения, ивенты, инструменты и сводки обновляются из чата${D.meta.export_until ? ", последний раз " + fLong(dTime(D.meta.export_until)) : ""}. У каждой карточки есть ссылка на исходное сообщение.</p>`;
 }
 
@@ -582,12 +583,12 @@ function viewerSheet() {
   openSheet(`<h3>Смотреть как</h3>${opts.map(([h, name, sub]) => `<button class="opt" data-act="viewer-set" data-h="${esc(h)}">
     <span class="ava ${h === "all" ? "all" : ""}">${h === "all" ? "Л" : esc(name.slice(0, 1))}</span><span><span class="t">${esc(name)}</span><span class="m" style="display:block;margin:0">${esc(sub)}</span></span>
     ${S.viewer === h ? '<span class="tick">✓</span>' : ""}</button>`).join("")}
-    <p class="note">По умолчанию портал показывает тебя: Telegram передаёт аккаунт при входе. Здесь можно посмотреть на Лабу глазами коллеги.</p>`);
+    <p class="note">По умолчанию портал показывает тебя: Telegram передаёт аккаунт при входе. Здесь можно посмотреть на Лабу глазами коллеги. Брать задачи и отмечать их можно только от своего имени.</p>`);
 }
 function taskSheet(id) {
   const t = D.tasks.find(x => x.id === id); if (!t) return;
   const hs = taskHandles(t), p = D.projects.find(x => x.name === t.project), isDone = doneOf(t);
-  const actor = tg ? S.me : (S.viewer !== "all" ? S.viewer : null), mine = !!actor && hs.includes(actor);
+  const actor = tg ? S.me : (S.viewer !== "all" ? S.viewer : null), mine = !!actor && hs.some(h => h.toLowerCase() === actor.toLowerCase());
   openSheet(`<h3>${esc(t.title)}</h3><dl class="kv">
     <dt>Проект</dt><dd>${esc(t.project)}${t.project !== t.project_raw ? ` <span class="m" style="display:inline">(в таблице «${esc(t.project_raw)}»)</span>` : ""}</dd>
     <dt>Кто</dt><dd>${hs.length ? hs.map(h => `${esc(nm(h))} <span class="m" style="display:inline">${esc(h)}</span>`).join("<br>") : "никто, нужны руки"}</dd>
@@ -595,8 +596,9 @@ function taskSheet(id) {
     <dt>Статус</dt><dd>${isDone ? "Готово" : esc(t.status || "без статуса")}</dd></dl>
     <div class="stack">${!mine && !isDone ? `<button class="btn primary wide" data-act="task-take" data-id="${t.id}">Беру</button>` : ""}
       <button class="btn wide" data-act="task-done" data-id="${t.id}">${isDone ? "Вернуть в работу" : "Готово"}</button>
+      ${mine && !isDone ? `<button class="btn wide" data-act="task-release" data-id="${t.id}">Вернуть в «Нужны руки»</button>` : ""}
       ${p && p.topic_link ? `<a class="btn wide" style="display:grid;place-items:center;text-decoration:none" href="${esc(p.topic_link)}" target="_blank" rel="noopener">Обсуждение в топике «${esc(p.topic_title)}»</a>` : ""}</div>
-    <p class="note">«Беру» и «Готово» сразу записываются в таблицу задач, «Напоминатель» это учтёт.</p>`);
+    <p class="note">${tg && S.me && S.viewer !== "all" && S.viewer.toLowerCase() !== S.me.toLowerCase() ? `Ты смотришь как ${esc(nm(S.viewer))}, но кнопки работают от твоего имени. ` : ""}«Беру», «Готово» и возврат в «Нужны руки» сразу записываются в таблицу задач, «Напоминатель» это учтёт.</p>`);
 }
 
 /* ---------- toast ---------- */
@@ -629,9 +631,17 @@ async function remote(action, payload, okMsg, rollback, after) {
     if (payload.taskId && $("sheet").classList.contains("on")) taskSheet(payload.taskId);
     haptic("error");
     const why = { row_changed: "строку в таблице успели изменить, обнови портал", no_username: "нужен @username в настройках Telegram",
-      target_row_busy: "под задачами в таблице занята строка", not_member: "портал только для участников AI laba" }[e.message] || e.message;
+      target_row_busy: "под задачами в таблице занята строка", not_member: "портал только для участников AI laba",
+      not_assignee: "ты не исполнитель этой задачи", task_done: "задача уже закрыта",
+      unknown_action: "сервер портала ещё не обновлён" }[e.message] || e.message;
     toast("Не сохранилось: " + why);
   }
+}
+function confirmAsk(text, yes) {
+  try { if (tg && tg.isVersionAtLeast("6.2")) { tg.showConfirm(text, ok => { if (ok) yes(); }); return; } } catch (e) { /* old client */ }
+  let ok = true;
+  try { ok = window.confirm(text); } catch (e) { /* no dialogs: the step is undone with «Беру» */ }
+  if (ok) yes();
 }
 document.getElementById("app").addEventListener("click", e => {
   const el = e.target.closest("[data-act]"); if (!el) return;
@@ -664,6 +674,20 @@ document.getElementById("app").addEventListener("click", e => {
       const t = D.tasks.find(x => x.id === id), who = actorHandle();
       S.taken[id] = who; if ($("sheet").classList.contains("on")) taskSheet(id); render(true);
       remote("take", { row: t.row, title: t.title, taskId: id }, `Задача теперь на тебе, ${nm(who)}.`, () => { delete S.taken[id]; });
+      break;
+    }
+    case "task-release": {
+      if (!needViewer()) break;
+      const t = D.tasks.find(x => x.id === id), me = actorHandle().toLowerCase();
+      confirmAsk(`Вернуть «${t.title}» в «Нужны руки»? Задача перестанет быть твоей.`, () => {
+        const prev = { handles: t.handles, taken: S.taken[id] };
+        t.handles = t.handles.filter(h => h.toLowerCase() !== me); delete S.taken[id];
+        const left = t.handles.slice();
+        closeSheet(); render(true);
+        remote("release", { row: t.row, title: t.title, taskId: id },
+          left.length ? `Задача больше не на тебе. Остались: ${names(left)}.` : `«${t.title}» снова в «Нужны руки».`,
+          () => { t.handles = prev.handles; if (prev.taken) S.taken[id] = prev.taken; });
+      });
       break;
     }
     case "ask-take": {
