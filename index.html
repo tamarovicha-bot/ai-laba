@@ -227,16 +227,21 @@ html.tg .phone { width: 100vw; height: var(--tg-viewport-stable-height, 100vh); 
 <script>
 let D = null;
 const tg = (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) ? window.Telegram.WebApp : null;
-async function api(action, extra) {
+async function api(action, extra, onRetry) {
   const payload = Object.assign({ action, initData: tg ? tg.initData : "" }, extra || {});
   if (window.LAB_MOCK) return window.LAB_MOCK(payload);
   if (!window.LAB_API || /PASTE/.test(window.LAB_API)) throw new Error("no_api_url");
   let last;
-  for (let i = 0; i < 3; i++) {  // Google endpoints sometimes drop the first connection; server actions are idempotent
+  for (let i = 0; i < 3; i++) {  // Google endpoints sometimes stall the first connection; server actions are idempotent
+    const ctl = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), 12000) : null;
     try {
-      const res = await fetch(window.LAB_API, { method: "POST", body: JSON.stringify(payload) });
+      const res = await fetch(window.LAB_API, { method: "POST", body: JSON.stringify(payload), signal: ctl ? ctl.signal : undefined });
       return JSON.parse(await res.text());
-    } catch (e) { last = e; await new Promise(r => setTimeout(r, 800 * (i + 1))); }
+    } catch (e) {
+      last = e;
+      if (i < 2) { if (onRetry) onRetry(i + 1); await new Promise(r => setTimeout(r, 800 * (i + 1))); }
+    } finally { if (timer) clearTimeout(timer); }
   }
   throw last;
 }
@@ -716,7 +721,7 @@ async function start() {
   if (!tg && !window.LAB_MOCK) { boot("Откройте портал в Telegram", "Ссылка: t.me/newsinaibot/lab. Данные Лабы видны только участникам AI laba."); return; }
   boot("Загружаем данные Лабы", "");
   try {
-    const r = await api("load");
+    const r = await api("load", null, () => boot("Загружаем данные Лабы", "Связь медленная, пробуем ещё раз."));
     if (!r.ok) {
       const why = { not_member: "Портал открыт только участникам AI laba.", expired: "Сессия устарела: закрой и открой портал заново.",
         bad_signature: "Telegram не подтвердил вход: открой портал заново." }[r.error] || ("Ошибка сервера: " + r.error);
