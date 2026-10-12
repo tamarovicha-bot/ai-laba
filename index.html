@@ -217,6 +217,27 @@ html.tg .brand small { font-size: 13.5px; }
 .meet[hidden] { display: none; }
 .meet-t { flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.3; color: var(--ink); }
 .meet .btn { flex: none; display: inline-flex; align-items: center; min-height: 32px; text-decoration: none; }
+.btn.danger { background: var(--red-bg); color: var(--red); }
+.del { flex: none; align-self: center; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 10px; background: var(--red-bg); color: var(--red); cursor: pointer; }
+.del svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.undo { position: absolute; left: 14px; right: 14px; bottom: 74px; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; border-radius: 12px; background: rgba(20, 28, 38, .94); color: #fff; font-size: 14px; line-height: 1.3; z-index: 31; }
+.undo[hidden] { display: none; }
+.undo-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.undo .btn { background: rgba(255, 255, 255, .16); color: #fff; font-variant-numeric: tabular-nums; }
+.fld { display: block; margin: 0 0 12px; }
+.fld > span { display: block; margin: 0 0 5px 2px; font-size: 13px; color: var(--hint); }
+.inp { display: block; width: 100%; box-sizing: border-box; min-height: 42px; padding: 9px 12px; border-radius: 10px; border: 0; background: var(--mute-bg); color: var(--ink); font: inherit; font-size: 15px; }
+textarea.inp { resize: none; min-height: 44px; line-height: 1.35; }
+.inp::placeholder { color: var(--hint); }
+.chips.in { flex-wrap: wrap; overflow: visible; margin: 0; padding: 8px 0 0; }
+.btn.mini { flex: none; min-height: 30px; padding: 0 10px; font-size: 13px; }
+.ag-add { display: flex; gap: 8px; align-items: flex-end; padding: 10px 14px 12px; }
+.ag-add .inp { flex: 1; }
+button.meet-t { cursor: pointer; background: none; border: 0; padding: 0; text-align: left; font-family: inherit; }
+.meet-t small { display: block; margin-top: 2px; font-size: 12.5px; color: var(--accent); }
+.spark { display: flex; align-items: flex-end; gap: 3px; height: 26px; margin-top: 8px; }
+.spark i { flex: 1; min-height: 2px; border-radius: 2px; background: var(--accent); opacity: .7; }
+.draft { margin-top: 5px; font-size: 13px; color: var(--hint); }
 </style>
 </head>
 <body>
@@ -231,6 +252,7 @@ html.tg .brand small { font-size: 13.5px; }
   <div class="backdrop" id="backdrop" data-act="sheet-close"></div>
   <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="undo" id="undo" role="status" aria-live="polite" hidden><span class="undo-t" id="undoText"></span><button class="btn" data-act="undo-del" id="undoBtn">Отменить</button></div>
 </div>
 <script>
 let D = null;
@@ -345,8 +367,9 @@ const $ = id => document.getElementById(id);
 function header() {
   $("sub").textContent = D && D.meta && D.meta.export_until ? `задачи сейчас · чат на ${fLong(dTime(D.meta.export_until))}` : "портал Лабы";
   const meet = D && D.meeting, mt = $("meet");
-  mt.hidden = !(meet && meet.text && meet.link);
-  mt.innerHTML = mt.hidden ? "" : `<div class="meet-t">${esc(meet.text)}</div><a class="btn primary" href="${esc(meet.link)}" target="_blank" rel="noopener">Телемост</a>`;
+  mt.hidden = !D || S.tab === "meet";
+  const nAg = mt.hidden ? 0 : openAgenda().length;
+  mt.innerHTML = mt.hidden ? "" : `<button class="meet-t" data-act="meet-open">${esc(meet && meet.text ? meet.text : "Встреча Лабы")}<small>${nAg ? `Повестка: ${nAg} ${plural(nAg, ["тема", "темы", "тем"])}` : "Повестка встречи"} ›</small></button>${meet && meet.link ? `<a class="btn primary" href="${esc(meet.link)}" target="_blank" rel="noopener">Телемост</a>` : ""}`;
   const v = S.viewer;
   $("viewerBtn").innerHTML = v === "all"
     ? `<span class="ava all">Л</span><span>Вся Лаба</span><span class="caret">▾</span>`
@@ -462,7 +485,7 @@ function homeProjects() {
   return `<section class="sec"><div class="sec-h"><span>Проекты · ${D.projects.length}</span>${ext(D.meta.sheet_url, "Таблица").replace("<a ", '<a class="act" ')}</div><div class="card">${rows}</div></section>`;
 }
 function renderHome() {
-  return homeAttention() + homeRibbon() + homeDecisions() + homeProjects() +
+  return homeAttention() + homeOwner() + homeRibbon() + homeDecisions() + homeProjects() +
     `<p class="foot">Задачи и проекты берутся из «Таблицы задач и проектов Лабы» при каждом открытии. Решения, ивенты, инструменты и сводки обновляются из чата${D.meta.export_until ? ", последний раз " + fLong(dTime(D.meta.export_until)) : ""}. У каждой карточки есть ссылка на исходное сообщение.</p>`;
 }
 
@@ -471,7 +494,7 @@ function renderTasks() {
   const mineN = S.viewer === "all" ? 0 : myTasks(S.viewer).length, hands = needsHands();
   let body = "";
   if (S.seg === "hands") {
-    body = `<div class="card" style="margin-top:12px">${hands.map(h => `<div class="row"><div class="grow"><div class="t">${esc(h.title)}</div>
+    body = `<div class="card" style="margin-top:12px"><div class="row tap" data-act="nt-open" data-assign="free"><div class="grow"><div class="t"><b>+ Попросить о помощи</b></div><div class="m">Задача без исполнителя попадёт в таблицу и сюда</div></div><span class="chev">›</span></div>${hands.map(h => `<div class="row"><div class="grow"><div class="t">${esc(h.title)}</div>
       <div class="m">${esc(h.project)} · ${esc(h.origin)}</div>${h.link ? `<div class="links">${ext(h.link, "Открыть в чате")}</div>` : ""}</div>
       <button class="btn primary" data-act="${h.kind === "task" ? "task-take" : "ask-take"}" data-id="${h.id}">Беру</button></div>`).join("") || `<div class="empty">Все задачи разобраны.</div>`}</div>`;
   } else {
@@ -487,7 +510,7 @@ function renderTasks() {
     }
   }
   const projs = [...new Set(D.tasks.map(t => t.project))];
-  return `<div class="h1"><b>Задачи</b>${ext(D.meta.sheet_url, "Таблица").replace("<a ", '<a class="lnk" ')}</div>
+  return `<div class="h1"><b>Задачи</b><button class="btn mini" data-act="nt-open">+ Задача</button>${ext(D.meta.sheet_url, "Таблица").replace("<a ", '<a class="lnk" ')}</div>
     <div class="seg" role="group" aria-label="Фильтр задач">
       <button data-act="seg" data-seg="all" aria-pressed="${S.seg === "all"}">Все <span class="num">${D.tasks.length}</span></button>
       <button data-act="seg" data-seg="mine" aria-pressed="${S.seg === "mine"}">Мои${S.viewer === "all" ? "" : ` <span class="num">${mineN}</span>`}</button>
@@ -510,13 +533,13 @@ function renderCalendar() {
     <div class="datecol">${it.end ? `<b class="rng">${it.start.getDate()}-${it.stop.getDate()}</b>` : `<b>${it.start.getDate()}</b>`}<small>${WD[it.start.getDay()]}</small></div>
     <div class="grow"><div class="t">${esc(it.title)}</div>${it.note ? `<div class="m">${esc(it.note)}</div>` : ""}
     ${it.links || it.url ? `<div class="links">${it.links ? ext(it.links[0], "Источник в чате") : ""}${it.url ? ext(it.url, "Сайт") : ""}</div>` : ""}</div>
-    <span class="pill ${KIND[it.kind][1]}">${KIND[it.kind][0]}</span></div>`;
+    <span class="pill ${KIND[it.kind][1]}">${KIND[it.kind][0]}</span>${S.owner && it.key && it.kind !== "task" ? delBtn("events", it.key) : ""}</div>`;
   let html = `<div class="h1"><b>Календарь</b></div><p class="lead">Вехи Лабы, дедлайны подачи и внешние события. Задачи подтягиваются из таблицы.</p>
     <div class="chips" role="group" aria-label="Тип">${kinds.map(([k, l]) => `<button class="chip" data-act="cal" data-k="${k}" aria-pressed="${S.calKind === k}">${l}</button>`).join("")}</div>`;
   if (over.length) html += `<div class="grp red">Просроченные задачи <span class="num">${over.length}</span></div><div class="card">${over.map(row).join("")}</div>`;
   Object.keys(groups).forEach(k => { const [y, m] = k.split("-").map(Number); html += `<div class="grp">${MONN[m]} ${y}</div><div class="card">${groups[k].map(row).join("")}</div>`; });
   if (S.calKind === "all" || S.calKind === "external") html += `<div class="grp">Без даты</div><div class="card">${(D.nodate || []).map(n => `<div class="row"><div class="grow"><div class="t">${esc(n.title)}</div><div class="m">${esc(n.note)}</div>
-    <div class="links">${ext(n.links[0], "Источник в чате")}${n.url ? ext(n.url, "Сайт") : ""}</div></div></div>`).join("")}</div>`;
+    <div class="links">${ext(n.links[0], "Источник в чате")}${n.url ? ext(n.url, "Сайт") : ""}</div></div>${S.owner && n.key ? delBtn("nodate", n.key) : ""}</div>`).join("")}</div>`;
   return html;
 }
 
@@ -544,7 +567,7 @@ function renderTools() {
       <div class="what">${esc(t.what)}</div>${t.verdict ? `<div class="verdict"><span>Отзыв.</span> ${esc(t.verdict)}</div>` : ""}
       <div class="m">${t.who ? esc(t.who) + " · " : ""}${fDay(dOnly(t.date))}${t.task ? " · задача в таблице" : ""}</div>
       <div class="links extra">${ext(t.links[0], "Источник в чате")}${t.links[1] ? ext(t.links[1], "Обсуждение") : ""}</div>
-      ${canTake ? `<div style="margin-top:8px"><button class="btn" data-act="tool-take" data-i="${i}">Беру на тест</button></div>` : ""}</div>
+      ${canTake || (S.owner && t.key && S.openTool === i) ? `<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">${canTake ? `<button class="btn" data-act="tool-take" data-i="${i}">Беру на тест</button>` : ""}${S.owner && t.key && S.openTool === i ? `<button class="btn danger" data-act="card-del" data-kind="tools" data-key="${esc(t.key)}">Удалить</button>` : ""}</div>` : ""}</div>
       <span class="pill ${ST_CLS[t.status]}">${esc(t.status)}</span></div>`;
   };
   return `<div class="h1"><b>Инструменты</b></div>
@@ -574,7 +597,7 @@ function renderNews() {
 
 /* ---------- sheets ---------- */
 function openSheet(html) { $("sheet").innerHTML = `<div class="grab"></div>` + html; $("sheet").classList.add("on"); $("backdrop").classList.add("on"); if (tg) tg.BackButton.show(); }
-function closeSheet() { $("sheet").classList.remove("on"); $("backdrop").classList.remove("on"); if (tg) tg.BackButton.hide(); }
+function closeSheet() { $("sheet").classList.remove("on"); $("backdrop").classList.remove("on"); if (tg) { if (S.tab === "meet") tg.BackButton.show(); else tg.BackButton.hide(); } }
 function viewerSheet() {
   const opts = [["all", "Вся Лаба", "общая картина"]].concat(D.people.map(p => {
     const n = myTasks(p.handle).length, r = myRoles(p.handle).length;
@@ -596,9 +619,10 @@ function taskSheet(id) {
     <dt>Статус</dt><dd>${isDone ? "Готово" : esc(t.status || "без статуса")}</dd></dl>
     <div class="stack">${!mine && !isDone ? `<button class="btn primary wide" data-act="task-take" data-id="${t.id}">Беру</button>` : ""}
       <button class="btn wide" data-act="task-done" data-id="${t.id}">${isDone ? "Вернуть в работу" : "Готово"}</button>
+      ${(mine || S.owner) && !isDone ? `<button class="btn wide" data-act="due-open" data-id="${t.id}">${t.deadline ? "Перенести срок" : "Поставить срок"}</button>` : ""}
       ${mine && !isDone ? `<button class="btn wide" data-act="task-release" data-id="${t.id}">Вернуть в «Нужны руки»</button>` : ""}
       ${p && p.topic_link ? `<a class="btn wide" style="display:grid;place-items:center;text-decoration:none" href="${esc(p.topic_link)}" target="_blank" rel="noopener">Обсуждение в топике «${esc(p.topic_title)}»</a>` : ""}</div>
-    <p class="note">${tg && S.me && S.viewer !== "all" && S.viewer.toLowerCase() !== S.me.toLowerCase() ? `Ты смотришь как ${esc(nm(S.viewer))}, но кнопки работают от твоего имени. ` : ""}«Беру», «Готово» и возврат в «Нужны руки» сразу записываются в таблицу задач, «Напоминатель» это учтёт.</p>`);
+    <p class="note">${tg && S.me && S.viewer !== "all" && S.viewer.toLowerCase() !== S.me.toLowerCase() ? `Ты смотришь как ${esc(nm(S.viewer))}, но кнопки работают от твоего имени. ` : ""}«Беру», «Готово», сроки и возврат в «Нужны руки» сразу записываются в таблицу задач, «Напоминатель» это учтёт.</p>`);
 }
 
 /* ---------- toast ---------- */
@@ -606,12 +630,15 @@ let toastTimer;
 function toast(msg) { const el = $("toast"); el.textContent = msg; el.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove("on"), 2600); }
 
 /* ---------- render + events ---------- */
-const SCREENS = { home: renderHome, tasks: renderTasks, calendar: renderCalendar, tools: renderTools, news: renderNews };
+const SCREENS = { home: renderHome, tasks: renderTasks, calendar: renderCalendar, tools: renderTools, news: renderNews, meet: renderMeet };
 function render(keepScroll) {
   if (!D) return;
   const sc = $("screen"), y = sc.scrollTop;
   header(); tabs(); sc.innerHTML = SCREENS[S.tab]();
   sc.scrollTop = keepScroll ? y : 0;
+  const agBox = $("agText");
+  if (agBox) agBox.addEventListener("input", e => { S.agDraft = e.target.value; });
+  if (tg) { if (S.tab === "meet" || $("sheet").classList.contains("on")) tg.BackButton.show(); else tg.BackButton.hide(); }
   const s = $("toolSearch");
   if (s) s.addEventListener("input", e => { S.toolQuery = e.target.value; const pos = e.target.selectionStart; render(true); const n = $("toolSearch"); n.focus(); n.setSelectionRange(pos, pos); });
 }
@@ -633,6 +660,13 @@ async function remote(action, payload, okMsg, rollback, after) {
     const why = { row_changed: "строку в таблице успели изменить, обнови портал", no_username: "нужен @username в настройках Telegram",
       target_row_busy: "под задачами в таблице занята строка", not_member: "портал только для участников AI laba",
       not_assignee: "ты не исполнитель этой задачи", task_done: "задача уже закрыта",
+      not_owner: "это может сделать только Антон", bad_card: "карточка уже изменилась, обнови портал",
+      hidden_full: "много удалений ждут ноутбук, повтори позже",
+      bad_deadline: "срок должен быть не раньше сегодняшнего дня", no_title: "напиши, что нужно сделать",
+      bad_assign: "исполнитель указан неверно", no_text: "слишком коротко", too_long: "слишком длинно, до 300 знаков",
+      agenda_full: "у тебя уже 8 открытых тем в повестке", not_author: "убрать тему может только автор или Антон",
+      bad_item: "повестка уже изменилась, обнови портал",
+      agenda_broken: "на вкладке «Повестка» нужны столбцы id, Пункт и Статус",
       unknown_action: "сервер портала ещё не обновлён" }[e.message] || e.message;
     toast("Не сохранилось: " + why);
   }
@@ -642,6 +676,62 @@ function confirmAsk(text, yes) {
   let ok = true;
   try { ok = window.confirm(text); } catch (e) { /* no dialogs: the step is undone with «Беру» */ }
   if (ok) yes();
+}
+/* owner-only deletion of chat cards (tools, events, no-date): «Ты уверен?», then 5 seconds to undo.
+   The request goes out only after the undo window (or right away when the app is closed). */
+let pendingDel = null;
+const delBtn = (kind, key) => `<button class="del" data-act="card-del" data-kind="${kind}" data-key="${esc(key)}" aria-label="Удалить"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.8 7l.9 12.2h8.6L17.2 7M10.2 10.6v5.6M13.8 10.6v5.6"/></svg></button>`;
+function askDelete(title, yes) {
+  const message = `Удалить «${title}»? Карточка исчезнет из портала у всех. Отменить можно в течение 5 секунд.`;
+  try {
+    if (tg && tg.isVersionAtLeast("6.2")) {
+      tg.showPopup({ title: "Ты уверен?", message: message.slice(0, 256),
+        buttons: [{ id: "del", type: "destructive", text: "Удалить" }, { type: "cancel" }] }, id => { if (id === "del") yes(); });
+      return;
+    }
+  } catch (e) { /* old client */ }
+  let ok = false;
+  try { ok = window.confirm("Ты уверен? " + message); } catch (e) { ok = false; }
+  if (ok) yes();
+}
+function showUndo(title, left) {
+  $("undoText").textContent = `Удалено: «${title}»`;
+  $("undoBtn").textContent = `Отменить · ${left}`;
+  $("undo").hidden = false;
+}
+function restoreCard(p) { const arr = D[p.kind] || (D[p.kind] = []); arr.splice(Math.min(p.idx, arr.length), 0, p.item); }
+function cardDelete(kind, key) {
+  const arr = D[kind] || [], idx = arr.findIndex(x => x.key === key);
+  if (idx < 0) return;
+  const item = arr[idx], title = item.name || item.title;
+  askDelete(title, () => {
+    commitDelete(false); // one pending deletion at a time: the previous one goes now
+    const at = (D[kind] || []).findIndex(x => x.key === key);
+    if (at < 0) return;
+    D[kind].splice(at, 1);
+    if (kind === "tools") { S.openTool = null; S.toolMoves = {}; }
+    render(true); haptic("warning");
+    let left = 5;
+    const p = { kind, key, title, idx: at, item };
+    p.tick = setInterval(() => { left -= 1; if (left > 0) showUndo(title, left); }, 1000);
+    p.timer = setTimeout(() => commitDelete(false), 5000);
+    pendingDel = p; showUndo(title, left);
+  });
+}
+function undoDelete() {
+  const p = pendingDel; if (!p) return;
+  pendingDel = null; clearTimeout(p.timer); clearInterval(p.tick); $("undo").hidden = true;
+  restoreCard(p); render(true); toast("Удаление отменено");
+}
+function commitDelete(leaving) {
+  const p = pendingDel; if (!p) return;
+  pendingDel = null; clearTimeout(p.timer); clearInterval(p.tick); $("undo").hidden = true;
+  const payload = { kind: p.kind, key: p.key, title: p.title };
+  if (leaving && !window.LAB_MOCK && navigator.sendBeacon && window.LAB_API) {
+    navigator.sendBeacon(window.LAB_API, JSON.stringify(Object.assign({ action: "hide_card", initData: tg ? tg.initData : "" }, payload)));
+    return;
+  }
+  remote("hide_card", payload, `Карточка «${p.title}» удалена`, () => restoreCard(p));
 }
 document.getElementById("app").addEventListener("click", e => {
   const el = e.target.closest("[data-act]"); if (!el) return;
@@ -671,9 +761,8 @@ document.getElementById("app").addEventListener("click", e => {
     }
     case "task-take": {
       if (!needViewer()) break;
-      const t = D.tasks.find(x => x.id === id), who = actorHandle();
-      S.taken[id] = who; if ($("sheet").classList.contains("on")) taskSheet(id); render(true);
-      remote("take", { row: t.row, title: t.title, taskId: id }, `Задача теперь на тебе, ${nm(who)}.`, () => { delete S.taken[id]; });
+      const t = D.tasks.find(x => x.id === id);
+      if (t.deadline) takeTask(t, ""); else dueSheet(id, "take"); // no deadline yet: «Когда сделаешь?» first
       break;
     }
     case "task-release": {
@@ -688,6 +777,72 @@ document.getElementById("app").addEventListener("click", e => {
           left.length ? `Задача больше не на тебе. Остались: ${names(left)}.` : `«${t.title}» снова в «Нужны руки».`,
           () => { t.handles = prev.handles; if (prev.taken) S.taken[id] = prev.taken; });
       });
+      break;
+    }
+    case "card-del": if (S.owner) cardDelete(el.dataset.kind, el.dataset.key); break;
+    case "undo-del": undoDelete(); break;
+    case "due-open": if (needViewer()) dueSheet(id, "set"); break;
+    case "due-pick": {
+      const t = D.tasks.find(x => x.id === id); if (!t) break;
+      let d = el.dataset.d;
+      if (d === "input") { d = ($("dueDate") || {}).value || ""; if (!d) { toast("Выбери дату в поле «Другая дата»"); break; } }
+      if (d && d < iso(today)) { toast("Эта дата уже прошла"); break; }
+      closeSheet();
+      if (el.dataset.mode === "take") takeTask(t, d); else setDue(t, d);
+      break;
+    }
+    case "nt-open": if (needViewer()) newTaskSheet({ assign: el.dataset.assign || "me", project: S.tab === "tasks" ? S.project || "" : "" }); break;
+    case "nt-due": { const f = $("ntDue"); if (f) f.value = el.dataset.d; break; }
+    case "nt-save": {
+      const title = ($("ntTitle").value || "").replace(/\s+/g, " ").trim(), who = $("ntWho").value, due = $("ntDue").value || "";
+      if (title.length < 3) { toast("Напиши, что нужно сделать"); $("ntTitle").focus(); break; }
+      if (due && due < iso(today)) { toast("Этот срок уже прошёл"); break; }
+      const draft = Object.assign({}, draftTask, { title, project: $("ntProject").value, assign: who, deadline: due });
+      const payload = { title, project: draft.project, assign: who === "me" || who === "free" ? who : [who] };
+      if (due) payload.deadline = due;
+      if (draft.decision) payload.decision = draft.decision;
+      closeSheet(); toast("Сохраняем в таблицу…");
+      remote("add_task", payload, who === "free" ? `«${title}» теперь в «Нужны руки»` : `Задача «${title}» в таблице`,
+        () => newTaskSheet(draft), r => { if (draft.decision) markMade(draft.decision, r, title); render(true); refresh(); });
+      break;
+    }
+    case "dec-task": {
+      if (!needViewer()) break;
+      const x = ((D.decisions && D.decisions.items) || []).find(y => y.key === el.dataset.k); if (!x) break;
+      newTaskSheet({ title: x.task || x.title, assign: x.handles && x.handles.length ? x.handles[0] : "free",
+        deadline: x.deadline && x.deadline >= iso(today) ? x.deadline : "", decision: x.key });
+      break;
+    }
+    case "hyg": hygSheet(el.dataset.k); break;
+    case "meet-open": if (S.tab !== "meet") S.prevTab = S.tab; S.tab = "meet"; closeSheet(); render(); break;
+    case "ag-add": {
+      if (!needViewer()) break;
+      const box = $("agText"), text = ((box && box.value) || "").replace(/\s+/g, " ").trim();
+      if (text.length < 3) { toast("Напиши тему для встречи"); if (box) box.focus(); break; }
+      const tmp = { id: "tmp" + Date.now(), text, by: actorHandle(), at: iso(today), done: false, pending: true };
+      (D.agenda = D.agenda || []).push(tmp); S.agDraft = ""; render(true);
+      remote("agenda_add", { text }, "Тема в повестке", () => { D.agenda = D.agenda.filter(x => x !== tmp); S.agDraft = text; },
+        r => { Object.assign(tmp, (r && r.item) || {}, { pending: false }); render(true); });
+      break;
+    }
+    case "ag-drop": {
+      const x = (D.agenda || []).find(y => y.id === el.dataset.ag); if (!x) break;
+      confirmAsk(`Убрать из повестки «${x.text}»?`, () => {
+        const i = D.agenda.indexOf(x); if (i < 0) return;
+        D.agenda.splice(i, 1); render(true);
+        remote("agenda_drop", { ids: [x.id] }, "Тема убрана из повестки", () => { D.agenda.splice(Math.min(i, D.agenda.length), 0, x); });
+      });
+      break;
+    }
+    case "ag-done": case "ag-done-all": {
+      const list = a === "ag-done" ? (D.agenda || []).filter(y => y.id === el.dataset.ag && !y.done) : openAgenda().filter(y => !y.pending);
+      if (!list.length) break;
+      const go = () => {
+        list.forEach(y => { y.done = true; y.meeting = iso(today); }); render(true);
+        remote("agenda_done", { ids: list.map(y => y.id) }, list.length > 1 ? "Повестка закрыта" : "Отмечено: обсудили",
+          () => list.forEach(y => { y.done = false; y.meeting = null; }));
+      };
+      if (a === "ag-done-all") confirmAsk(`Отметить ${list.length} ${plural(list.length, ["тему", "темы", "тем"])} обсуждёнными?`, go); else go();
       break;
     }
     case "ask-take": {
@@ -716,7 +871,139 @@ document.getElementById("app").addEventListener("click", e => {
   const href = a.getAttribute("href");
   if (href.indexOf("https://t.me/") === 0) tg.openTelegramLink(href); else tg.openLink(href);
 }, true);
+document.addEventListener("visibilitychange", () => { if (document.hidden) commitDelete(true); });
+window.addEventListener("pagehide", () => commitDelete(true));
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
+/* ---------- A: deadlines, new tasks and the owner's view of task hygiene ---------- */
+const openAgenda = () => ((D && D.agenda) || []).filter(x => !x.done);
+const WEEKDAYS = [[/воскрес/i, 0], [/понедельн/i, 1], [/вторник/i, 2], [/сред[уаы]/i, 3], [/четверг/i, 4], [/пятниц/i, 5], [/суббот/i, 6]];
+const WD_FULL = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
+const dmy = d => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(2, 4)}` : "");
+/* the regular meeting: weekday and time from the chat's meeting card, Sunday 11:00 by default */
+function meetDay() {
+  const text = (D && D.meeting && D.meeting.text) || "";
+  const hit = WEEKDAYS.find(([re]) => re.test(text)), tm = text.match(/(\d{1,2})[:.](\d{2})/);
+  let n = ((hit ? hit[1] : 0) - today.getDay() + 7) % 7;
+  if (n === 0 && now.getHours() >= (tm ? Number(tm[1]) : 11) + 2) n = 7; // today's meeting is over
+  return { date: addDays(today, n), time: tm ? `${tm[1]}:${tm[2]}` : null, inDays: n };
+}
+function duePresets() {
+  const m = meetDay(), seen = new Set();
+  return [["К встрече", m.inDays === 0 ? addDays(m.date, 7) : m.date], ["Через неделю", addDays(today, 7)], ["Через две недели", addDays(today, 14)]]
+    .map(([label, d]) => ({ label, iso: iso(d), sub: `${WD[d.getDay()]}, ${fDay(d)}` }))
+    .filter(p => !seen.has(p.iso) && seen.add(p.iso));
+}
+function dueSheet(id, mode) {
+  const t = D.tasks.find(x => x.id === id); if (!t) return;
+  const head = mode === "take" ? "Когда сделаешь?" : t.deadline ? "Перенести срок" : "Поставить срок";
+  openSheet(`<h3>${head}</h3><p class="m" style="margin:-4px 0 14px">«${esc(t.title)}»${mode === "set" && t.deadline ? `, сейчас до ${fLong(dOnly(t.deadline))}` : ""}</p>
+    <div class="stack">${duePresets().map(p => `<button class="btn wide" data-act="due-pick" data-id="${t.id}" data-mode="${mode}" data-d="${p.iso}">${p.label} · ${p.sub}</button>`).join("")}
+      <label class="fld" style="margin:6px 0 0"><span>Другая дата</span><input class="inp" type="date" id="dueDate" min="${iso(today)}" max="${iso(addDays(today, 365))}"></label>
+      <button class="btn primary wide" data-act="due-pick" data-id="${t.id}" data-mode="${mode}" data-d="input">Сохранить эту дату</button>
+      ${mode === "take" ? `<button class="btn wide" data-act="due-pick" data-id="${t.id}" data-mode="take" data-d="">Пока без срока</button>` : ""}
+      ${mode === "set" && t.deadline && S.owner ? `<button class="btn wide danger" data-act="due-pick" data-id="${t.id}" data-mode="set" data-d="">Убрать срок</button>` : ""}</div>
+    <p class="note">Срок запишется в таблицу задач. «Напоминатель» покажет задачу под её датой, портал подсветит, когда срок подойдёт.</p>`);
+}
+function takeTask(t, d) {
+  const id = t.id, who = actorHandle(), prev = { deadline: t.deadline, raw: t.deadline_raw };
+  S.taken[id] = who;
+  if (d && !t.deadline) { t.deadline = d; t.deadline_raw = dmy(d); }
+  if ($("sheet").classList.contains("on")) taskSheet(id);
+  render(true);
+  remote("take", d ? { row: t.row, title: t.title, taskId: id, deadline: d } : { row: t.row, title: t.title, taskId: id },
+    `Задача теперь на тебе, ${nm(who)}${d ? `, срок ${fLong(dOnly(d))}` : ""}.`,
+    () => { delete S.taken[id]; t.deadline = prev.deadline; t.deadline_raw = prev.raw; },
+    r => { if (r && r.deadline !== undefined) { t.deadline = r.deadline; t.deadline_raw = r.deadline_raw || ""; render(true); } });
+}
+function setDue(t, d) {
+  const prev = { deadline: t.deadline, raw: t.deadline_raw };
+  t.deadline = d || null; t.deadline_raw = dmy(d);
+  render(true);
+  remote("set_deadline", { row: t.row, title: t.title, deadline: d, taskId: t.id }, d ? `Новый срок: ${fLong(dOnly(d))}` : "Срок убран",
+    () => { t.deadline = prev.deadline; t.deadline_raw = prev.raw; });
+}
+let draftTask = null;
+function newTaskSheet(pre) {
+  const p = Object.assign({ title: "", project: "", assign: "me", deadline: "", decision: "" }, pre || {});
+  if (S.me && String(p.assign).toLowerCase() === S.me.toLowerCase()) p.assign = "me";
+  draftTask = p;
+  const projOf = name => { const x = D.projects.find(y => y.name === name || y.raw === name); return x ? (x.raw || x.name) : name; };
+  const sel = projOf(p.project || ""), projs = [...new Set(D.projects.map(x => x.raw || x.name))];
+  const mine = S.me ? S.me.toLowerCase() : "";
+  const who = [["me", "Беру сам(а)"], ["free", "Нужны руки: без исполнителя"]].concat(S.owner
+    ? D.people.filter(x => x.handle.toLowerCase() !== mine).map(x => [x.handle, `${x.name} ${x.handle}`]) : []);
+  if (S.owner && /^@/.test(p.assign) && !who.some(([v]) => v === p.assign)) who.push([p.assign, p.assign]);
+  openSheet(`<h3>${p.decision ? "Задача по итогам встречи" : "Новая задача"}</h3>
+    <label class="fld"><span>Что сделать</span><textarea class="inp" id="ntTitle" rows="2" maxlength="200" placeholder="Например: собрать кейсы для доклада">${esc(p.title)}</textarea></label>
+    <label class="fld"><span>Проект</span><select class="inp" id="ntProject"><option value="">Без проекта</option>${projs.map(x => `<option ${x === sel ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></label>
+    <label class="fld"><span>Кто</span><select class="inp" id="ntWho">${who.map(([v, l]) => `<option value="${esc(v)}" ${v === p.assign ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
+    <div class="fld"><span>Срок</span><input class="inp" type="date" id="ntDue" value="${esc(p.deadline)}" min="${iso(today)}" max="${iso(addDays(today, 365))}">
+      <div class="chips in">${duePresets().map(o => `<button class="chip" data-act="nt-due" data-d="${o.iso}">${o.label}</button>`).join("")}<button class="chip" data-act="nt-due" data-d="">Без срока</button></div></div>
+    <button class="btn primary wide" data-act="nt-save">Добавить в таблицу</button>
+    <p class="note">Строка появится в «Таблице задач и проектов Лабы». ${S.owner ? "Назначить можно любого участника." : "Можно взять задачу себе или отдать в «Нужны руки»."}</p>`);
+}
+function markMade(key, r, title) {
+  const x = ((D.decisions && D.decisions.items) || []).find(y => y.key === key);
+  if (x) x.made = { row: r && r.row, title };
+}
+function homeOwner() {
+  if (!S.owner) return "";
+  const open = D.tasks.filter(t => !doneOf(t));
+  const noDue = open.filter(t => !t.deadline), over = open.filter(t => bucket(t) === "overdue"), free = open.filter(t => !taskHandles(t).length);
+  const idle = D.projects.filter(p => !open.some(t => t.project === p.name));
+  const st = D.stats, peak = st ? Math.max(1, ...st.days14) : 1;
+  const line = (k, label, n, hint) => `<div class="row tap" data-act="hyg" data-k="${k}"><div class="grow"><div class="t">${label} <span class="pill ${!n ? "p-green" : k === "over" ? "p-red" : "p-amber"}">${n}</span></div><div class="m">${hint}</div></div><span class="chev">›</span></div>`;
+  return `<section class="sec"><div class="sec-h"><span>Порядок в задачах</span><span style="text-transform:none;letter-spacing:0">видишь только ты</span></div><div class="card">
+    ${line("nodue", "Без срока", noDue.length, noDue.length ? "Поставь срок: сейчас «Напоминатель» складывает их в общий список" : "У всех открытых задач есть срок")}
+    ${line("over", "Просрочено", over.length, over.length ? "Перенеси срок или закрой задачу" : "Просрочек нет")}
+    ${line("free", "Без исполнителя", free.length, free.length ? "Они ждут в «Нужны руки»" : "У каждой задачи есть исполнитель")}
+    ${idle.length ? `<div class="row"><div class="grow"><div class="t">Проекты без открытых задач <span class="pill p-mute">${idle.length}</span></div><div class="m">${esc(idle.map(p => p.name).join(", "))}</div></div></div>` : ""}
+    ${st ? `<div class="row"><div class="grow"><div class="t">Портал открывали</div><div class="m">сегодня ${st.today}, за 7 дней ${st.week}, за 4 недели ${st.month} ${plural(st.month, ["человек", "человека", "человек"])}; тебя не считаю</div>
+      <div class="spark" role="img" aria-label="Открытия по дням за две недели">${st.days14.map(n => `<i style="height:${Math.max(2, Math.round(26 * n / peak))}px"></i>`).join("")}</div></div></div>` : ""}
+  </div></section>`;
+}
+function hygSheet(k) {
+  const open = D.tasks.filter(t => !doneOf(t));
+  const list = k === "nodue" ? open.filter(t => !t.deadline) : k === "over" ? open.filter(t => bucket(t) === "overdue") : open.filter(t => !taskHandles(t).length);
+  openSheet(`<h3>${{ nodue: "Задачи без срока", over: "Просроченные задачи", free: "Задачи без исполнителя" }[k] || "Задачи"}</h3>
+    <div class="card" style="background:var(--bg2)">${list.map(t => taskRow(t)).join("") || `<div class="empty">Таких задач нет.</div>`}</div>
+    <p class="note">Нажми на задачу: в её карточке можно поставить или перенести срок.</p>`);
+}
+
+/* ---------- B: the meeting screen: agenda, deadlines before it, free tasks, decisions into tasks ---------- */
+function decisionRow(x) {
+  const who = x.handles && x.handles.length ? names(x.handles) : "", when = x.deadline ? "до " + fDay(dOnly(x.deadline)) : "";
+  const draft = x.task ? `Черновик задачи: ${esc(x.task)}${who || when ? " · " + esc([who, when].filter(Boolean).join(", ")) : ""}` : "";
+  return `<div class="row"><div class="grow"><div class="t"><b>${esc(x.title)}</b></div><div class="m" style="color:var(--ink);opacity:.86">${esc(x.text || "")}</div>
+    ${x.made ? `<div class="draft">✓ В таблице: «${esc(x.made.title)}»</div>` : draft ? `<div class="draft">${draft}</div>` : ""}
+    ${x.links && x.links[0] ? `<div class="links">${ext(x.links[0], "В чате")}</div>` : ""}</div>
+    ${S.owner && x.key && !x.made ? `<button class="btn mini" data-act="dec-task" data-k="${esc(x.key)}">В задачу</button>` : ""}</div>`;
+}
+function renderMeet() {
+  const m = meetDay(), ag = openAgenda(), past = (D.agenda || []).filter(x => x.done), me = S.me ? S.me.toLowerCase() : "";
+  const due = D.tasks.filter(t => !doneOf(t) && t.deadline && dOnly(t.deadline) <= m.date).sort((a, b) => (a.deadline < b.deadline ? -1 : 1));
+  const hands = needsHands(), dec = D.decisions || { items: [] };
+  const when = m.inDays === 0 ? "сегодня" : m.inDays === 1 ? "завтра" : WD_FULL[m.date.getDay()];
+  const agRow = x => `<div class="row"><div class="grow"><div class="t">${esc(x.text)}</div><div class="m">${esc(nm(x.by))}${/^\d{4}-\d{2}-\d{2}/.test(x.at || "") ? ", " + fDay(dOnly(x.at)) : ""}${x.pending ? ", сохраняем…" : ""}</div></div>
+    ${S.owner && !x.pending ? `<button class="btn mini" data-act="ag-done" data-ag="${esc(x.id)}">Обсудили</button>` : ""}
+    ${!x.pending && (S.owner || (me && String(x.by).toLowerCase() === me)) ? `<button class="btn mini danger" data-act="ag-drop" data-ag="${esc(x.id)}" aria-label="Убрать из повестки">✕</button>` : ""}</div>`;
+  return `<div class="h1"><b>Встреча Лабы</b>${D.meeting && D.meeting.link ? `<a class="btn primary" href="${esc(D.meeting.link)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Телемост</a>` : ""}</div>
+    <p class="m" style="margin:0 4px 14px">${esc(when)}, ${fLong(m.date)}${m.time ? ", " + m.time : ""}</p>
+    <section class="sec"><div class="sec-h"><span>Повестка · ${ag.length}</span>${S.owner && ag.length ? `<button class="act" data-act="ag-done-all">Всё обсудили</button>` : ""}</div><div class="card">
+      ${ag.map(agRow).join("") || `<div class="empty">Пока пусто. Предложи тему или вопрос к встрече.</div>`}
+      <div class="ag-add"><textarea class="inp" id="agText" rows="1" maxlength="300" placeholder="Что обсудить на встрече?">${esc(S.agDraft || "")}</textarea><button class="btn primary" data-act="ag-add">Добавить</button></div></div></section>
+    <section class="sec"><div class="sec-h"><span>Сроки до встречи · ${due.length}</span><button class="act" data-act="tab" data-tab="tasks">Все задачи</button></div><div class="card">
+      ${due.map(t => taskRow(t)).join("") || `<div class="empty">До встречи сроков нет.</div>`}</div></section>
+    <section class="sec"><div class="sec-h"><span>Нужны руки · ${hands.length}</span>${hands.length ? `<button class="act" data-act="seg-go" data-seg="hands">Взять</button>` : ""}</div><div class="card">
+      ${hands.slice(0, 5).map(h => `<div class="row"><div class="grow"><div class="t">${esc(h.title)}</div><div class="m">${esc([h.project, h.origin].filter(Boolean).join(" · "))}</div></div></div>`).join("") || `<div class="empty">Все задачи разобраны.</div>`}</div></section>
+    ${dec.items && dec.items.length ? `<section class="sec"><div class="sec-h"><span>Решения встречи${dec.date ? " " + fLong(dOnly(dec.date)) : ""}</span></div><div class="card">${dec.items.map(decisionRow).join("")}</div></section>` : ""}
+    ${past.length ? `<section class="sec"><div class="sec-h"><span>Уже обсудили</span></div><div class="card">${past.map(x => `<div class="row"><div class="grow"><div class="t">${esc(x.text)}</div><div class="m">${esc(nm(x.by))}${x.meeting ? ", обсудили " + fDay(dOnly(x.meeting)) : ""}</div></div></div>`).join("")}</div></section>` : ""}
+    <p class="foot">Повестка лежит на вкладке «Повестка» в таблице Лабы. Предложить тему может любой участник, убрать тему может её автор и Антон.</p>`;
+}
+function goBack() {
+  if ($("sheet").classList.contains("on")) { closeSheet(); return; }
+  if (S.tab === "meet") { S.tab = S.prevTab || "home"; render(); }
+}
 function boot(title, text, retry) {
   $("screen").innerHTML = `<div class="boot"><div><b>${esc(title)}</b>${esc(text || "")}${retry ? '<div style="margin-top:14px"><button class="btn" data-act="reload">Повторить</button></div>' : ""}</div></div>`;
 }
@@ -728,6 +1015,8 @@ function applyData(data, user) {
   PEOPLE = Object.fromEntries(D.people.map(p => [p.handle, p.name]));
   const me = user && user.username ? D.people.find(p => p.handle.toLowerCase() === "@" + user.username.toLowerCase()) : null;
   S.me = me ? me.handle : null;
+  S.owner = !!(user && user.owner);
+  if (pendingDel) D[pendingDel.kind] = (D[pendingDel.kind] || []).filter(x => x.key !== pendingDel.key);
   if (params.get("viewer")) S.viewer = params.get("viewer");
   else if (S.me && !S.viewerTouched) S.viewer = S.me;
   if (S.viewer !== "all" && !PEOPLE[S.viewer]) S.viewer = "all";
@@ -740,8 +1029,9 @@ async function start() {
     tg.ready(); tg.expand();
     document.documentElement.dataset.theme = tg.colorScheme;
     tg.onEvent("themeChanged", () => { document.documentElement.dataset.theme = tg.colorScheme; });
-    tg.BackButton.onClick(closeSheet);
+    tg.BackButton.onClick(goBack);
     if (sp && TABS.includes(sp)) S.tab = sp;
+    if (sp === "meet") { S.prevTab = "home"; S.tab = "meet"; }
   }
   header(); tabs();
   if (!tg && !window.LAB_MOCK) { boot("Откройте портал в Telegram", "Ссылка: t.me/newsinaibot/lab. Данные Лабы видны только участникам AI laba."); return; }
@@ -757,6 +1047,10 @@ async function start() {
     applyData(r.data, r.user);
     /* «Открыть задачи» from a reminder: show the person's own open tasks when there are any */
     if (sp === "tasks" && S.me && myTasks(S.me).some(t => !doneOf(t))) { S.seg = "mine"; render(); }
+    if (params.get("tab") === "meet") { S.prevTab = "home"; S.tab = "meet"; render(); }
+    if (params.get("due")) dueSheet(params.get("due"), "take");
+    if (params.get("nt")) newTaskSheet({ assign: params.get("nt") });
+    if (params.get("hyg")) hygSheet(params.get("hyg"));
     /* deep links for review: ?seg=hands&day=2026-10-14&tool=2&scroll=600&sheet=r2&pick=1 */
     if (params.get("seg")) { S.seg = params.get("seg"); render(); }
     if (params.get("day")) { S.day = params.get("day"); render(); }
