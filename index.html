@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI laba</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="config.js"></script>
+<style>
+/* Tokens follow Telegram Mini App theme params: inside Telegram the --tg-theme-* vars win,
+   outside (this prototype) the fallbacks below are used. */
+:root {
+  --bg: var(--tg-theme-bg-color, #ffffff);
+  --bg2: var(--tg-theme-secondary-bg-color, #eff1f4);
+  --ink: var(--tg-theme-text-color, #11161c);
+  --hint: var(--tg-theme-hint-color, #7b8591);
+  --accent: var(--tg-theme-link-color, #2481cc);
+  --btn: var(--tg-theme-button-color, #2481cc);
+  --btn-ink: var(--tg-theme-button-text-color, #ffffff);
+  --section: var(--tg-theme-section-header-text-color, #6b7684);
+  --sep: rgba(40, 52, 66, .13);
+  --red: #d9433a; --amber: #c97a00; --green: #2a9a50;
+  --red-bg: rgba(217, 67, 58, .11); --amber-bg: rgba(201, 122, 0, .13);
+  --green-bg: rgba(42, 154, 80, .12); --accent-bg: rgba(36, 129, 204, .11); --mute-bg: rgba(110, 122, 136, .13);
+  --shadow: 0 1px 0 rgba(20, 30, 45, .04);
+}
+:root[data-theme="dark"] {
+  --bg: var(--tg-theme-bg-color, #17212b); --bg2: var(--tg-theme-secondary-bg-color, #0e1621);
+  --ink: var(--tg-theme-text-color, #eef2f6); --hint: var(--tg-theme-hint-color, #7f8c99);
+  --accent: var(--tg-theme-link-color, #64b5f2); --btn: var(--tg-theme-button-color, #3a8bd0);
+  --section: var(--tg-theme-section-header-text-color, #6fb0e6); --sep: rgba(255, 255, 255, .08);
+  --red: #ff6f66; --amber: #f0a43a; --green: #55c27a;
+  --red-bg: rgba(255, 111, 102, .14); --amber-bg: rgba(240, 164, 58, .15); --green-bg: rgba(85, 194, 122, .14);
+  --accent-bg: rgba(100, 181, 242, .14); --mute-bg: rgba(160, 175, 190, .13); --shadow: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: var(--tg-theme-bg-color, #17212b); --bg2: var(--tg-theme-secondary-bg-color, #0e1621);
+    --ink: var(--tg-theme-text-color, #eef2f6); --hint: var(--tg-theme-hint-color, #7f8c99);
+    --accent: var(--tg-theme-link-color, #64b5f2); --btn: var(--tg-theme-button-color, #3a8bd0);
+    --section: var(--tg-theme-section-header-text-color, #6fb0e6); --sep: rgba(255, 255, 255, .08);
+    --red: #ff6f66; --amber: #f0a43a; --green: #55c27a;
+    --red-bg: rgba(255, 111, 102, .14); --amber-bg: rgba(240, 164, 58, .15); --green-bg: rgba(85, 194, 122, .14);
+    --accent-bg: rgba(100, 181, 242, .14); --mute-bg: rgba(160, 175, 190, .13); --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font: 15px/1.38 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased; color: var(--ink); background: transparent;
+}
+html.standalone body { min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 28px 0 40px; background: #d9dee5; }
+:root[data-theme="dark"].standalone body { background: #070b10; }
+@media (prefers-color-scheme: dark) { html.standalone:not([data-theme="light"]) body { background: #070b10; } }
+
+.phone {
+  width: 400px; height: 820px; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; background: var(--bg2); color: var(--ink);
+  border-radius: 22px; border: 1px solid var(--sep);
+}
+html.standalone .phone { box-shadow: 0 24px 60px rgba(16, 26, 40, .22); border: 0; }
+@media (max-width: 520px) {
+  html.standalone body { padding: 0; background: var(--bg2); }
+  html.standalone .phone, html.tg .phone { width: 100vw; height: 100vh; height: 100dvh; border-radius: 0; box-shadow: none; border: 0; }
+}
+
+/* top bar */
+.top { display: flex; align-items: center; gap: 10px; padding: 12px 14px 10px; background: var(--bg); border-bottom: 1px solid var(--sep); }
+.brand { flex: 1; min-width: 0; }
+.brand b { display: block; font-size: 17px; letter-spacing: -.01em; }
+.brand small { display: block; font-size: 12.5px; color: var(--hint); }
+.viewer { display: flex; align-items: center; gap: 7px; min-height: 36px; padding: 4px 10px 4px 4px; border: 0; border-radius: 18px; background: var(--bg2); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+.ava { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; flex: none; }
+.ava.all { background: var(--mute-bg); color: var(--ink); }
+.caret { color: var(--hint); font-size: 11px; }
+
+/* screen */
+.screen { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 4px 12px 18px; scroll-behavior: smooth; }
+.screen::-webkit-scrollbar { width: 0; }
+.h1 { display: flex; align-items: baseline; gap: 8px; margin: 14px 4px 4px; }
+.h1 b { font-size: 22px; letter-spacing: -.02em; flex: 1; }
+.lead { margin: 0 4px 6px; color: var(--hint); font-size: 13.5px; }
+.lead a { color: var(--accent); text-decoration: none; }
+.sec { margin-top: 18px; }
+.sec-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 4px 6px; font-size: 12.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--section); }
+.sec-h .act { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; text-decoration: none; }
+.card { background: var(--bg); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+.row { position: relative; display: flex; gap: 10px; align-items: flex-start; padding: 11px 14px; }
+.row + .row::before { content: ""; position: absolute; top: 0; left: 14px; right: 0; height: 1px; background: var(--sep); }
+.row.tap { cursor: pointer; }
+.row.tap:active { background: var(--bg2); }
+.grow { flex: 1; min-width: 0; }
+.t { font-size: 15px; line-height: 1.32; }
+.t b { font-weight: 600; }
+.m { margin-top: 2px; font-size: 13px; color: var(--hint); line-height: 1.35; }
+.m a, a.lnk { color: var(--accent); text-decoration: none; }
+.chev { color: var(--hint); align-self: center; font-size: 18px; line-height: 1; }
+.num { font-variant-numeric: tabular-nums; }
+.empty { padding: 16px 14px; color: var(--hint); font-size: 14px; }
+
+/* pills and buttons */
+.pill { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.p-red { color: var(--red); background: var(--red-bg); }
+.p-amber { color: var(--amber); background: var(--amber-bg); }
+.p-green { color: var(--green); background: var(--green-bg); }
+.p-accent { color: var(--accent); background: var(--accent-bg); }
+.p-mute { color: var(--hint); background: var(--mute-bg); }
+.btn { min-height: 34px; padding: 0 12px; border-radius: 10px; border: 0; background: var(--accent-bg); color: var(--accent); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.btn.primary { background: var(--btn); color: var(--btn-ink); }
+.btn.wide { width: 100%; min-height: 46px; font-size: 15px; }
+button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.links { display: flex; gap: 14px; margin-top: 6px; font-size: 13.5px; }
+.links a, .links button { color: var(--accent); text-decoration: none; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+
+/* signature: date ribbon */
+.ribbon-wrap { padding: 12px 0 4px; }
+.ribbon { display: flex; overflow-x: auto; padding: 0 10px 6px; scroll-snap-type: x proximity; }
+.ribbon::-webkit-scrollbar { height: 0; }
+.day { flex: none; width: 44px; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0 7px; border: 0; background: none; color: var(--ink); font: inherit; border-radius: 12px; cursor: pointer; scroll-snap-align: start; position: relative; }
+.day .wd { font-size: 11px; color: var(--hint); text-transform: lowercase; }
+.day .dn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.day.we .dn { color: var(--hint); font-weight: 500; }
+.day.today .dn { background: var(--btn); color: var(--btn-ink); }
+.day.sel { background: var(--bg2); }
+.day .dots { height: 7px; display: flex; gap: 3px; }
+.dot { width: 6px; height: 6px; border-radius: 50%; }
+.k-lab { background: var(--accent); }
+.k-deadline { background: var(--amber); }
+.k-external { background: transparent; box-shadow: inset 0 0 0 1.5px var(--hint); }
+.k-task { background: var(--ink); opacity: .55; }
+.day .mon { position: absolute; top: -2px; left: 4px; font-size: 10px; font-weight: 700; color: var(--section); text-transform: uppercase; letter-spacing: .04em; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 2px 14px 10px; font-size: 12px; color: var(--hint); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.rib-head { display: flex; align-items: center; gap: 8px; padding: 0 14px; font-size: 13px; color: var(--hint); }
+.datecol { width: 42px; flex: none; text-align: center; line-height: 1.1; }
+.datecol b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
+.datecol small { font-size: 11.5px; color: var(--hint); }
+.datecol b.rng { font-size: 13.5px; letter-spacing: -.02em; padding-top: 2px; }
+
+/* segmented + chips */
+.seg { display: flex; background: var(--mute-bg); border-radius: 10px; padding: 2px; margin: 8px 0 0; }
+.seg button { flex: 1; min-height: 34px; border: 0; background: none; border-radius: 8px; font: inherit; font-size: 14px; color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--bg); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.chips { display: flex; gap: 6px; overflow-x: auto; padding: 10px 0 2px; margin: 0 -12px; padding-left: 12px; padding-right: 12px; }
+.chips::-webkit-scrollbar { height: 0; }
+.chip { flex: none; min-height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid var(--sep); background: var(--bg); color: var(--ink); font: inherit; font-size: 13.5px; cursor: pointer; white-space: nowrap; }
+.chip[aria-pressed="true"] { background: var(--btn); border-color: var(--btn); color: var(--btn-ink); }
+.chip .c { opacity: .65; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.search { width: 100%; min-height: 38px; margin-top: 8px; padding: 0 12px; border-radius: 10px; border: 0; background: var(--mute-bg); color: var(--ink); font: inherit; font-size: 15px; }
+.search::placeholder { color: var(--hint); }
+
+/* tasks */
+.check { width: 24px; height: 24px; flex: none; margin-top: 1px; border-radius: 50%; border: 1.8px solid var(--hint); background: none; cursor: pointer; display: grid; place-items: center; padding: 0; color: transparent; }
+.check.on { background: var(--green); border-color: var(--green); color: #fff; }
+.check svg { width: 14px; height: 14px; }
+.done .t { color: var(--hint); text-decoration: line-through; }
+.grp { margin: 16px 4px 6px; font-size: 12.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--section); display: flex; gap: 6px; align-items: center; }
+.grp.red { color: var(--red); }
+
+/* pulse */
+.bar { height: 6px; border-radius: 3px; background: var(--accent); opacity: .8; }
+.bar-track { flex: 1; height: 6px; border-radius: 3px; background: var(--mute-bg); align-self: center; overflow: hidden; }
+
+/* tools */
+.tool .what { margin-top: 3px; font-size: 14px; line-height: 1.38; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tool.open .what { -webkit-line-clamp: unset; }
+.tool .verdict { margin-top: 5px; font-size: 13.5px; color: var(--ink); }
+.tool .verdict span { color: var(--hint); }
+.tool .extra { display: none; }
+.tool.open .extra { display: flex; }
+.pipeline { margin: 2px 4px 0; font-size: 13px; color: var(--hint); }
+
+/* news */
+.cat { padding: 10px 14px 4px; font-size: 13px; font-weight: 600; color: var(--section); }
+.news-item { display: block; padding: 6px 14px 8px 28px; position: relative; color: var(--ink); text-decoration: none; font-size: 14.5px; line-height: 1.36; }
+.news-item::before { content: ""; position: absolute; left: 15px; top: 13px; width: 5px; height: 5px; border-radius: 50%; background: var(--hint); }
+details.prev { background: var(--bg); border-radius: 14px; margin-top: 8px; overflow: hidden; }
+details.prev summary { list-style: none; padding: 12px 14px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+details.prev summary::-webkit-details-marker { display: none; }
+
+/* tab bar */
+.tabs { display: flex; background: var(--bg); border-top: 1px solid var(--sep); padding: 4px 4px calc(6px + env(safe-area-inset-bottom)); }
+.tabs button { flex: 1; min-height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 0; background: none; color: var(--hint); font: inherit; font-size: 11px; cursor: pointer; position: relative; }
+.tabs button[aria-current="page"] { color: var(--accent); }
+.tabs svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.badge { position: absolute; top: 4px; left: calc(50% + 6px); min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px; background: var(--red); color: #fff; font-size: 11px; font-weight: 700; line-height: 17px; text-align: center; }
+
+/* bottom sheet + toast */
+.backdrop { position: absolute; inset: 0; background: rgba(8, 14, 22, .38); opacity: 0; pointer-events: none; transition: opacity .2s ease; z-index: 20; }
+.backdrop.on { opacity: 1; pointer-events: auto; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 82%; overflow-y: auto; background: var(--bg); border-radius: 16px 16px 0 0; padding: 8px 16px 18px; transform: translateY(102%); transition: transform .24s cubic-bezier(.2, .8, .2, 1); z-index: 21; }
+.sheet.on { transform: none; }
+.sheet::-webkit-scrollbar { width: 0; }
+.grab { width: 36px; height: 4px; border-radius: 2px; background: var(--sep); margin: 2px auto 10px; }
+.sheet h3 { margin: 4px 0 12px; font-size: 19px; line-height: 1.28; letter-spacing: -.01em; }
+.kv { display: grid; grid-template-columns: 86px 1fr; gap: 8px 10px; font-size: 14.5px; margin-bottom: 16px; }
+.kv dt { color: var(--hint); }
+.kv dd { margin: 0; }
+.stack { display: grid; gap: 8px; }
+.note { margin-top: 12px; font-size: 12.5px; color: var(--hint); line-height: 1.4; }
+.opt { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 6px 4px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; border-radius: 10px; }
+.opt + .opt { border-top: 1px solid var(--sep); border-radius: 0; }
+.opt .tick { margin-left: auto; color: var(--accent); font-weight: 700; }
+.toast { position: absolute; left: 14px; right: 14px; bottom: 74px; padding: 11px 14px; border-radius: 12px; background: rgba(20, 28, 38, .92); color: #fff; font-size: 14px; line-height: 1.35; opacity: 0; transform: translateY(8px); transition: opacity .2s, transform .2s; pointer-events: none; z-index: 30; }
+.toast.on { opacity: 1; transform: none; }
+.foot { margin: 22px 6px 6px; font-size: 12px; color: var(--hint); line-height: 1.45; }
+@media (prefers-reduced-motion: reduce) { .sheet, .backdrop, .toast { transition: none; } .screen { scroll-behavior: auto; } }
+html.tg body { background: var(--bg2); }
+html.tg .phone { width: 100vw; height: var(--tg-viewport-stable-height, 100vh); border-radius: 0; border: 0; box-shadow: none; }
+.boot { flex: 1; display: grid; place-items: center; min-height: 60%; padding: 40px 24px; text-align: center; color: var(--hint); font-size: 15px; line-height: 1.45; }
+.boot b { display: block; color: var(--ink); font-size: 17px; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div class="phone" id="app">
+  <header class="top">
+    <div class="brand"><b>AI laba</b><small id="sub"></small></div>
+    <button class="viewer" id="viewerBtn" data-act="viewer-open" aria-haspopup="dialog"></button>
+  </header>
+  <main class="screen" id="screen"></main>
+  <nav class="tabs" id="tabs" aria-label="Разделы"></nav>
+  <div class="backdrop" id="backdrop" data-act="sheet-close"></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</div>
+<script>
+let D = null;
+const tg = (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) ? window.Telegram.WebApp : null;
+async function api(action, extra) {
+  const payload = Object.assign({ action, initData: tg ? tg.initData : "" }, extra || {});
+  if (window.LAB_MOCK) return window.LAB_MOCK(payload);
+  if (!window.LAB_API || /PASTE/.test(window.LAB_API)) throw new Error("no_api_url");
+  let last;
+  for (let i = 0; i < 3; i++) {  // Google endpoints sometimes drop the first connection; server actions are idempotent
+    try {
+      const res = await fetch(window.LAB_API, { method: "POST", body: JSON.stringify(payload) });
+      return JSON.parse(await res.text());
+    } catch (e) { last = e; await new Promise(r => setTimeout(r, 800 * (i + 1))); }
+  }
+  throw last;
+}
+const haptic = kind => { try { if (tg) tg.HapticFeedback.notificationOccurred(kind); } catch (e) {} };
+
+/* ---------- helpers ---------- */
+const MON = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+const MONG = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+const MONN = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+const WD = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const plural = (n, f) => f[(n % 10 === 1 && n % 100 !== 11) ? 0 : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 1 : 2];
+function dOnly(s) { const [y, m, d] = s.slice(0, 10).split("-").map(Number); return new Date(y, m - 1, d); }
+function dTime(s) { const [a, b = "00:00"] = s.split("T"); const [y, m, d] = a.split("-").map(Number); const [h, mi] = b.split(":").map(Number); return new Date(y, m - 1, d, h, mi); }
+const now = new Date();
+const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const diff = (a, b) => Math.round((b - a) / 864e5);
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const fDay = d => `${d.getDate()} ${MON[d.getMonth()]}`;
+const fLong = d => `${d.getDate()} ${MONG[d.getMonth()]}`;
+const fRange = (a, b) => b ? (a.getMonth() === b.getMonth() ? `${a.getDate()}-${b.getDate()} ${MON[a.getMonth()]}` : `${fDay(a)} - ${fDay(b)}`) : fDay(a);
+function ago(s) {
+  if (!s) return "нет данных";
+  const n = diff(dOnly(s), today);
+  if (n <= 0) return "сегодня";
+  if (n === 1) return "вчера";
+  if (n > 45) return "давно";
+  return `${n} ${plural(n, ["день", "дня", "дней"])} назад`;
+}
+const ext = (href, label) => `<a href="${esc(href)}" target="_blank" rel="noopener">${label}</a>`;
+
+/* ---------- state ---------- */
+const params = new URLSearchParams(location.search);
+const store = { get(k) { try { return localStorage.getItem("ailaba." + k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem("ailaba." + k, v); } catch (e) {} } };
+const TABS = ["home", "tasks", "calendar", "tools", "news"];
+const S = {
+  tab: TABS.includes(params.get("tab")) ? params.get("tab") : (store.get("tab") || "home"),
+  viewer: params.get("viewer") || store.get("viewer") || "all",
+  seg: "all", project: null, calKind: "all", toolStatus: "all", toolQuery: "", day: null,
+  done: new Set(), taken: {}, askTaken: {}, toolMoves: {}, openTool: null,
+};
+if (params.get("theme")) document.documentElement.dataset.theme = params.get("theme");
+if (tg) document.documentElement.classList.add("tg");
+else if (window.self === window.top) document.documentElement.classList.add("standalone");
+
+let PEOPLE = {};
+const doneOf = t => !!(t.done || S.done.has(t.id));
+const nm = h => PEOPLE[h] || h;
+const names = hs => hs.length <= 2 ? hs.map(nm).join(", ") : `${hs.slice(0, 2).map(nm).join(", ")} +${hs.length - 2}`;
+
+/* ---------- derived ---------- */
+function taskHandles(t) { return S.taken[t.id] ? [...new Set([...t.handles, S.taken[t.id]])] : t.handles; }
+function bucket(t) {
+  if (doneOf(t)) return "done";
+  if (!t.deadline) return "nodate";
+  const n = diff(today, dOnly(t.deadline));
+  return n < 0 ? "overdue" : n === 0 ? "today" : n <= 7 ? "week" : "later";
+}
+const BUCKETS = [["overdue", "Просрочено"], ["today", "Сегодня"], ["week", "На неделе"], ["later", "Позже"], ["nodate", "Без срока"], ["done", "Сделано"]];
+function dueLabel(t) {
+  if (!t.deadline) return null;
+  const n = diff(today, dOnly(t.deadline));
+  if (doneOf(t)) return { txt: "готово", cls: "p-green" };
+  if (n < 0) return { txt: `${-n} ${plural(-n, ["день", "дня", "дней"])} просрочки`, cls: "p-red" };
+  if (n === 0) return { txt: "сегодня", cls: "p-amber" };
+  if (n === 1) return { txt: "завтра", cls: "p-amber" };
+  return { txt: fDay(dOnly(t.deadline)), cls: "p-mute" };
+}
+function needsHands() {
+  const fromSheet = D.tasks.filter(t => !taskHandles(t).length && !doneOf(t))
+    .map(t => ({ kind: "task", id: t.id, title: t.title, project: t.project, origin: "из таблицы задач" }));
+  const asks = D.needs_hands.map((a, i) => ({ kind: "ask", id: "a" + i, title: a.title, project: a.project, origin: a.origin, link: a.links[0] }))
+    .filter(a => !S.askTaken[a.id] && !D.tasks.some(t => t.title === a.title));
+  return fromSheet.concat(asks);
+}
+function myTasks(h) { return D.tasks.filter(t => taskHandles(t).includes(h)); }
+function myRoles(h) { return D.roles.filter(r => r.handles.includes(h)); }
+function timeline(viewer) {
+  const items = (D.events || []).map(e => ({ ...e, start: dOnly(e.date), stop: e.end ? dOnly(e.end) : dOnly(e.date) }));
+  D.tasks.forEach(t => {
+    if (!t.deadline || doneOf(t)) return;
+    if (viewer !== "all" && !taskHandles(t).includes(viewer)) return;
+    const d = dOnly(t.deadline);
+    items.push({ kind: "task", title: t.title, note: `${t.project} · ${names(taskHandles(t)) || "без исполнителя"}`, start: d, stop: d, taskId: t.id });
+  });
+  return items.sort((a, b) => a.start - b.start);
+}
+const KIND = { lab: ["Лаба", "p-accent", "k-lab"], deadline: ["Подача", "p-amber", "k-deadline"], external: ["Внешнее", "p-mute", "k-external"], task: ["Задача", "p-mute", "k-task"] };
+
+/* ---------- rendering: shared bits ---------- */
+const $ = id => document.getElementById(id);
+function header() {
+  $("sub").textContent = D && D.meta && D.meta.export_until ? `задачи сейчас · чат на ${fLong(dTime(D.meta.export_until))}` : "портал Лабы";
+  const v = S.viewer;
+  $("viewerBtn").innerHTML = v === "all"
+    ? `<span class="ava all">Л</span><span>Вся Лаба</span><span class="caret">▾</span>`
+    : `<span class="ava">${esc(nm(v).slice(0, 1))}</span><span>${esc(nm(v))}</span><span class="caret">▾</span>`;
+  $("viewerBtn").setAttribute("aria-label", "Смотреть как: " + (v === "all" ? "вся Лаба" : nm(v)));
+}
+const ICONS = {
+  home: '<path d="M4 11.2 12 4.8l8 6.4V19.5a1 1 0 0 1-1 1h-4.6v-6h-4.8v6H5a1 1 0 0 1-1-1z"/>',
+  tasks: '<path d="M10 7h10M10 12h10M10 17h10"/><path d="m3.6 7 1.6 1.6L8 5.8M3.6 12l1.6 1.6L8 10.8M3.6 17l1.6 1.6L8 15.8"/>',
+  calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.6"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  tools: '<path d="M14.8 6.1a4.2 4.2 0 0 0-5.6 5.4L3.8 16.9V20.2h3.3l5.4-5.4a4.2 4.2 0 0 0 5.4-5.6l-2.7 2.7-2.5-.6-.6-2.5z"/>',
+  news: '<path d="M5 4.8h11v14.4H6.2A1.2 1.2 0 0 1 5 18z"/><path d="M16 9h3v9a1.2 1.2 0 0 1-1.2 1.2H16M8.2 8.6h4.6M8.2 12h4.6M8.2 15.4h3"/>',
+};
+const TAB_LABEL = { home: "Главная", tasks: "Задачи", calendar: "Календарь", tools: "Инструменты", news: "Новости" };
+function tabs() {
+  const overdue = !D ? 0 : D.tasks.filter(t => bucket(t) === "overdue" && (S.viewer === "all" || taskHandles(t).includes(S.viewer))).length;
+  $("tabs").innerHTML = TABS.map(t => `<button data-act="tab" data-tab="${t}" ${S.tab === t ? 'aria-current="page"' : ""}>
+    <svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[t]}</svg>${TAB_LABEL[t]}
+    ${t === "tasks" && overdue ? `<span class="badge">${overdue}</span>` : ""}</button>`).join("");
+}
+function taskRow(t, opts = {}) {
+  const hs = taskHandles(t), due = dueLabel(t), isDone = doneOf(t);
+  return `<div class="row tap ${isDone ? "done" : ""}" data-act="task-open" data-id="${t.id}">
+    <button class="check ${isDone ? "on" : ""}" data-act="task-done" data-id="${t.id}" aria-label="${isDone ? "Вернуть в работу" : "Отметить готовой"}"><svg viewBox="0 0 16 16"><path d="m3.5 8.2 3 3 6-6.4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="grow"><div class="t">${esc(t.title)}</div>
+      <div class="m">${esc(t.project)}${opts.hideWho ? "" : " · " + (hs.length ? esc(names(hs)) : "без исполнителя")}</div></div>
+    ${due ? `<span class="pill ${due.cls}">${due.txt}</span>` : ""}</div>`;
+}
+
+/* ---------- home ---------- */
+function homeAttention() {
+  if (S.viewer === "all") {
+    const over = D.tasks.filter(t => bucket(t) === "overdue"), tod = D.tasks.filter(t => bucket(t) === "today");
+    const nh = needsHands();
+    const rows = [...over, ...tod].slice(0, 5).map(t => taskRow(t)).join("");
+    const more = over.length + tod.length - 5;
+    return `<section class="sec"><div class="sec-h"><span>Требует внимания</span><button class="act" data-act="tab" data-tab="tasks">Все задачи</button></div>
+      <div class="card">${rows || `<div class="empty">Просрочек и дедлайнов на сегодня нет.</div>`}
+      ${more > 0 ? `<div class="row tap" data-act="tab" data-tab="tasks"><div class="grow m">Ещё ${more} ${plural(more, ["задача", "задачи", "задач"])} с горящим сроком</div><span class="chev">›</span></div>` : ""}
+      <div class="row tap" data-act="seg-go" data-seg="hands"><div class="grow"><div class="t"><b>Нужны руки</b> <span class="pill p-accent">${nh.length}</span></div>
+        <div class="m">${esc(nh.slice(0, 2).map(x => x.title).join(" · "))}</div></div><span class="chev">›</span></div></div></section>`;
+  }
+  const name = nm(S.viewer), tasks = myTasks(S.viewer), roles = myRoles(S.viewer);
+  const order = { overdue: 0, today: 1, week: 2, later: 3, nodate: 4, done: 5 };
+  const tRows = tasks.sort((a, b) => order[bucket(a)] - order[bucket(b)]).map(t => taskRow(t, { hideWho: true })).join("");
+  const rRows = roles.map(r => {
+    const d = dOnly(r.date), n = diff(today, d);
+    return `<div class="row"><div class="datecol"><b>${d.getDate()}</b><small>${MON[d.getMonth()]}</small></div>
+      <div class="grow"><div class="t">${esc(r.title)}</div><div class="m">${esc(r.note)}</div>
+      <div class="links">${ext(r.links[0], "Решение в чате")}</div></div>
+      <span class="pill ${n <= 3 ? "p-amber" : "p-accent"}">${n < 0 ? "прошло" : n === 0 ? "сегодня" : "через " + n + " " + plural(n, ["день", "дня", "дней"])}</span></div>`;
+  }).join("");
+  return `<section class="sec"><div class="sec-h"><span>Что ждут от тебя, ${esc(name)}</span><button class="act" data-act="seg-go" data-seg="mine">Мои задачи</button></div>
+    <div class="card">${tRows}${rRows}${!tRows && !rRows ? `<div class="empty">Сейчас на тебе ничего нет. Загляни в «Нужны руки».</div>` : ""}
+    <div class="row tap" data-act="seg-go" data-seg="hands"><div class="grow"><div class="t"><b>Нужны руки</b> <span class="pill p-accent">${needsHands().length}</span></div><div class="m">Можно взять себе</div></div><span class="chev">›</span></div></div></section>`;
+}
+function homeRibbon() {
+  const items = timeline(S.viewer);
+  const horizon = 28, end = addDays(today, horizon - 1);
+  const over = D.tasks.filter(t => bucket(t) === "overdue" && (S.viewer === "all" || taskHandles(t).includes(S.viewer))).length;
+  let cells = "";
+  for (let i = 0; i < horizon; i++) {
+    const d = addDays(today, i), key = iso(d);
+    const here = items.filter(it => it.start <= d && it.stop >= d);
+    const kinds = [...new Set(here.map(h => h.kind))].slice(0, 3);
+    const mon = (i === 0 || d.getDate() === 1) ? `<span class="mon">${MON[d.getMonth()]}</span>` : "";
+    cells += `<button class="day ${i === 0 ? "today" : ""} ${[0, 6].includes(d.getDay()) ? "we" : ""} ${S.day === key ? "sel" : ""}" data-act="day" data-d="${key}" aria-label="${fLong(d)}, ${here.length} ${plural(here.length, ["событие", "события", "событий"])}">
+      ${mon}<span class="wd">${WD[d.getDay()]}</span><span class="dn">${d.getDate()}</span>
+      <span class="dots">${kinds.map(k => `<i class="dot ${KIND[k][2]}"></i>`).join("")}</span></button>`;
+  }
+  let list;
+  if (S.day) {
+    const d = dOnly(S.day);
+    list = items.filter(it => it.start <= d && it.stop >= d);
+  } else list = items.filter(it => it.stop >= today).slice(0, 5);
+  const later = items.filter(it => it.start > end).length;
+  const rows = list.map(it => `<div class="row ${it.taskId ? "tap" : ""}" ${it.taskId ? `data-act="task-open" data-id="${it.taskId}"` : ""}>
+      <div class="datecol"><b>${it.start.getDate()}</b><small>${MON[it.start.getMonth()]}</small></div>
+      <div class="grow"><div class="t">${esc(it.title)}</div><div class="m">${esc(it.note || "")}${it.end ? (it.note ? " · " : "") + "до " + fDay(it.stop) : ""}</div></div>
+      <span class="pill ${KIND[it.kind][1]}">${KIND[it.kind][0]}</span></div>`).join("");
+  return `<section class="sec"><div class="sec-h"><span>Ближайшие 4 недели</span><button class="act" data-act="tab" data-tab="calendar">Календарь</button></div>
+    <div class="card"><div class="ribbon-wrap">
+      ${over ? `<div class="rib-head"><span class="pill p-red">${over} ${plural(over, ["задача", "задачи", "задач"])} просрочено</span></div>` : ""}
+      <div class="ribbon" role="group" aria-label="Дни">${cells}</div>
+      <div class="legend"><span><i class="dot k-lab"></i>Лаба</span><span><i class="dot k-deadline"></i>подача</span><span><i class="dot k-external"></i>внешнее</span><span><i class="dot k-task"></i>задача</span></div></div>
+      ${S.day ? `<div class="row tap" data-act="day" data-d="${S.day}"><div class="grow m">${fLong(dOnly(S.day))}: ${list.length ? list.length + " " + plural(list.length, ["событие", "события", "событий"]) : "ничего не запланировано"} · показать ближайшие</div><span class="chev">×</span></div>` : ""}
+      ${rows}
+      ${!S.day && later ? `<div class="row tap" data-act="tab" data-tab="calendar"><div class="grow m">Дальше ещё ${later} ${plural(later, ["событие", "события", "событий"])}, включая конференции в декабре</div><span class="chev">›</span></div>` : ""}
+    </div></section>`;
+}
+function homeDecisions() {
+  const dec = D.decisions, m = D.meeting;
+  if (!dec || !dec.date || !dec.items || !dec.items.length) return "";
+  const d = dOnly(dec.date);
+  return `<section class="sec"><div class="sec-h"><span>Решено на встрече ${fLong(d)}</span></div>
+    <div class="card">${dec.items.map(x => `<div class="row"><div class="grow"><div class="t"><b>${esc(x.title)}</b></div>
+      <div class="m" style="color:var(--ink);opacity:.86">${esc(x.text)}</div><div class="links">${ext(x.links[0], "В чате")}</div></div></div>`).join("")}
+    ${m ? `<div class="row"><div class="grow"><div class="t">${esc(m.text)}</div><div class="m">Ссылка постоянная</div></div><a class="btn" href="${esc(m.link)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Телемост</a></div>` : ""}</div></section>`;
+}
+function homeProjects() {
+  const rows = D.projects.map(p => {
+    const ts = D.tasks.filter(t => t.project === p.name && !doneOf(t));
+    const nextDue = ts.filter(t => t.deadline).map(t => dOnly(t.deadline)).sort((a, b) => a - b)[0];
+    const over = ts.filter(t => bucket(t) === "overdue").length;
+    const bits = [`${ts.length} ${plural(ts.length, ["задача", "задачи", "задач"])}`];
+    if (over) bits.push(`<span style="color:var(--red)">${over} ${plural(over, ["просрочена", "просрочены", "просрочено"])}</span>`);
+    else if (nextDue) bits.push(`срок ${fDay(nextDue)}`);
+    bits.push(p.topic ? `в чате ${ago(p.last)}` : "без топика");
+    return `<div class="row tap" data-act="project" data-p="${esc(p.name)}"><div class="grow"><div class="t"><b>${esc(p.name)}</b></div>
+      <div class="m">${bits.join(" · ")}</div>
+      <div class="links">${p.topic_link ? `<a href="${esc(p.topic_link)}" target="_blank" rel="noopener">Топик «${esc(p.topic_title)}»</a>` : ""}${p.link ? `<a href="${esc(p.link)}" target="_blank" rel="noopener">${esc(p.link_kind)}</a>` : ""}</div></div><span class="chev">›</span></div>`;
+  }).join("");
+  return `<section class="sec"><div class="sec-h"><span>Проекты · ${D.projects.length}</span>${ext(D.meta.sheet_url, "Таблица").replace("<a ", '<a class="act" ')}</div><div class="card">${rows}</div></section>`;
+}
+function homePulse() {
+  const top = (D.pulse || []).slice(0, 6), max = Math.max(1, ...top.map(p => p.n7));
+  if (!top.length) return "";
+  return `<section class="sec"><div class="sec-h"><span>Где идёт разговор · 7 дней</span></div><div class="card">
+    ${top.map(p => `<a class="row tap" href="${esc(p.link)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;align-items:center">
+      <div style="width:150px" class="t">${esc(p.title)}</div><div class="bar-track"><div class="bar" style="width:${Math.max(6, p.n7 / max * 100)}%"></div></div>
+      <span class="num m" style="width:28px;text-align:right;margin:0">${p.n7}</span></a>`).join("")}</div></section>`;
+}
+function renderHome() {
+  return homeAttention() + homeRibbon() + homeDecisions() + homeProjects() + homePulse() +
+    `<p class="foot">Задачи и проекты берутся из «Таблицы задач и проектов Лабы» при каждом открытии. Решения, ивенты, инструменты и сводки обновляются из чата${D.meta.export_until ? ", последний раз " + fLong(dTime(D.meta.export_until)) : ""}. У каждой карточки есть ссылка на исходное сообщение.</p>`;
+}
+
+/* ---------- tasks ---------- */
+function renderTasks() {
+  const mineN = S.viewer === "all" ? 0 : myTasks(S.viewer).length, hands = needsHands();
+  let body = "";
+  if (S.seg === "hands") {
+    body = `<div class="card" style="margin-top:12px">${hands.map(h => `<div class="row"><div class="grow"><div class="t">${esc(h.title)}</div>
+      <div class="m">${esc(h.project)} · ${esc(h.origin)}</div>${h.link ? `<div class="links">${ext(h.link, "Открыть в чате")}</div>` : ""}</div>
+      <button class="btn primary" data-act="${h.kind === "task" ? "task-take" : "ask-take"}" data-id="${h.id}">Беру</button></div>`).join("") || `<div class="empty">Все задачи разобраны.</div>`}</div>`;
+  } else {
+    let list = S.seg === "mine" ? (S.viewer === "all" ? [] : myTasks(S.viewer)) : D.tasks.slice();
+    if (S.project) list = list.filter(t => t.project === S.project);
+    if (S.seg === "mine" && S.viewer === "all") body = `<div class="card" style="margin-top:12px"><div class="empty">Выбери себя в «Вся Лаба ▾» сверху. В Telegram это определится по аккаунту.</div></div>`;
+    else {
+      body = BUCKETS.map(([b, label]) => {
+        const ts = list.filter(t => bucket(t) === b);
+        if (!ts.length) return "";
+        return `<div class="grp ${b === "overdue" ? "red" : ""}">${label} <span class="num">${ts.length}</span></div><div class="card">${ts.map(t => taskRow(t)).join("")}</div>`;
+      }).join("") || `<div class="card" style="margin-top:12px"><div class="empty">Задач нет.</div></div>`;
+    }
+  }
+  const projs = [...new Set(D.tasks.map(t => t.project))];
+  return `<div class="h1"><b>Задачи</b>${ext(D.meta.sheet_url, "Таблица").replace("<a ", '<a class="lnk" ')}</div>
+    <div class="seg" role="group" aria-label="Фильтр задач">
+      <button data-act="seg" data-seg="all" aria-pressed="${S.seg === "all"}">Все <span class="num">${D.tasks.length}</span></button>
+      <button data-act="seg" data-seg="mine" aria-pressed="${S.seg === "mine"}">Мои${S.viewer === "all" ? "" : ` <span class="num">${mineN}</span>`}</button>
+      <button data-act="seg" data-seg="hands" aria-pressed="${S.seg === "hands"}">Нужны руки <span class="num">${hands.length}</span></button></div>
+    ${S.seg !== "hands" ? `<div class="chips" role="group" aria-label="Проект"><button class="chip" data-act="proj" data-p="" aria-pressed="${!S.project}">Все проекты</button>
+      ${projs.map(p => `<button class="chip" data-act="proj" data-p="${esc(p)}" aria-pressed="${S.project === p}">${esc(p)}<span class="c">${D.tasks.filter(t => t.project === p).length}</span></button>`).join("")}</div>` : ""}
+    ${body}`;
+}
+
+/* ---------- calendar ---------- */
+function renderCalendar() {
+  const all = timeline("all");
+  const kinds = [["all", "Все"], ["lab", "Лаба"], ["deadline", "Подача"], ["external", "Внешние"], ["task", "Задачи"]];
+  const pick = it => S.calKind === "all" || it.kind === S.calKind;
+  const over = all.filter(it => it.kind === "task" && it.stop < today && pick(it));
+  const upcoming = all.filter(it => it.stop >= today && pick(it));
+  const groups = {};
+  upcoming.forEach(it => { const k = `${it.start.getFullYear()}-${it.start.getMonth()}`; (groups[k] = groups[k] || []).push(it); });
+  const row = it => `<div class="row ${it.taskId ? "tap" : ""}" ${it.taskId ? `data-act="task-open" data-id="${it.taskId}"` : ""}>
+    <div class="datecol">${it.end ? `<b class="rng">${it.start.getDate()}-${it.stop.getDate()}</b>` : `<b>${it.start.getDate()}</b>`}<small>${WD[it.start.getDay()]}</small></div>
+    <div class="grow"><div class="t">${esc(it.title)}</div>${it.note ? `<div class="m">${esc(it.note)}</div>` : ""}
+    ${it.links || it.url ? `<div class="links">${it.links ? ext(it.links[0], "Источник в чате") : ""}${it.url ? ext(it.url, "Сайт") : ""}</div>` : ""}</div>
+    <span class="pill ${KIND[it.kind][1]}">${KIND[it.kind][0]}</span></div>`;
+  let html = `<div class="h1"><b>Календарь</b></div><p class="lead">Вехи Лабы, дедлайны подачи и внешние события. Задачи подтягиваются из таблицы.</p>
+    <div class="chips" role="group" aria-label="Тип">${kinds.map(([k, l]) => `<button class="chip" data-act="cal" data-k="${k}" aria-pressed="${S.calKind === k}">${l}</button>`).join("")}</div>`;
+  if (over.length) html += `<div class="grp red">Просроченные задачи <span class="num">${over.length}</span></div><div class="card">${over.map(row).join("")}</div>`;
+  Object.keys(groups).forEach(k => { const [y, m] = k.split("-").map(Number); html += `<div class="grp">${MONN[m]} ${y}</div><div class="card">${groups[k].map(row).join("")}</div>`; });
+  if (S.calKind === "all" || S.calKind === "external") html += `<div class="grp">Без даты</div><div class="card">${(D.nodate || []).map(n => `<div class="row"><div class="grow"><div class="t">${esc(n.title)}</div><div class="m">${esc(n.note)}</div>
+    <div class="links">${ext(n.links[0], "Источник в чате")}${n.url ? ext(n.url, "Сайт") : ""}</div></div></div>`).join("")}</div>`;
+  return html;
+}
+
+/* ---------- tools ---------- */
+const STATUSES = ["Используем", "Пробовали", "На тесте", "Ищем тестера", "Кандидат"];
+const ST_CLS = { "Используем": "p-green", "Пробовали": "p-accent", "На тесте": "p-amber", "Ищем тестера": "p-red", "Кандидат": "p-mute" };
+function toolView(t, i) {
+  let mv = S.toolMoves[i];
+  if (!mv && t.status !== "На тесте") {
+    const k = D.tasks.find(x => x.title === `${t.name}, тест` && !doneOf(x));
+    if (k) mv = k.handles.length ? nm(k.handles[0]) : k.who;
+  }
+  return mv ? { ...t, status: "На тесте", who: mv } : t;
+}
+function renderTools() {
+  const tools = D.tools.map(toolView);
+  const q = S.toolQuery.trim().toLowerCase();
+  const shown = tools.map((t, i) => [t, i]).filter(([t]) => (S.toolStatus === "all" || t.status === S.toolStatus) &&
+    (!q || (t.name + " " + t.cat + " " + t.what).toLowerCase().includes(q)));
+  shown.sort((a, b) => STATUSES.indexOf(a[0].status) - STATUSES.indexOf(b[0].status));
+  const card = ([t, i]) => {
+    const canTake = t.status === "Кандидат" || t.status === "Ищем тестера";
+    return `<div class="row tool tap ${S.openTool === i ? "open" : ""}" data-act="tool-toggle" data-i="${i}">
+      <div class="grow"><div class="t"><b>${esc(t.name)}</b> <span class="m" style="display:inline">${esc(t.cat)}</span></div>
+      <div class="what">${esc(t.what)}</div>${t.verdict ? `<div class="verdict"><span>Отзыв.</span> ${esc(t.verdict)}</div>` : ""}
+      <div class="m">${t.who ? esc(t.who) + " · " : ""}${fDay(dOnly(t.date))}${t.task ? " · задача в таблице" : ""}</div>
+      <div class="links extra">${ext(t.links[0], "Источник в чате")}${t.links[1] ? ext(t.links[1], "Обсуждение") : ""}</div>
+      ${canTake ? `<div style="margin-top:8px"><button class="btn" data-act="tool-take" data-i="${i}">Беру на тест</button></div>` : ""}</div>
+      <span class="pill ${ST_CLS[t.status]}">${esc(t.status)}</span></div>`;
+  };
+  return `<div class="h1"><b>Инструменты</b></div>
+    <p class="pipeline">Путь инструмента: кандидат → ищем тестера → на тесте → пробовали → используем</p>
+    <input class="search" id="toolSearch" type="search" placeholder="Найти инструмент или задачу" value="${esc(S.toolQuery)}" aria-label="Поиск инструментов">
+    <div class="chips" role="group" aria-label="Статус"><button class="chip" data-act="tool-status" data-s="all" aria-pressed="${S.toolStatus === "all"}">Все<span class="c">${tools.length}</span></button>
+      ${STATUSES.map(s => `<button class="chip" data-act="tool-status" data-s="${s}" aria-pressed="${S.toolStatus === s}">${s}<span class="c">${tools.filter(t => t.status === s).length}</span></button>`).join("")}</div>
+    <div class="card" style="margin-top:10px">${shown.map(card).join("") || `<div class="empty">Ничего не нашлось. Предложи инструмент, и он попадёт в кандидаты.</div>`}</div>
+    <div style="margin-top:12px"><button class="btn wide" data-act="suggest">Предложить инструмент</button></div>
+    <p class="foot">Карточки собраны из «Полезного», «Технологических новостей» и «Запросов на добровольцев». Статус «На тесте» связан с задачей в таблице.</p>`;
+}
+
+/* ---------- news ---------- */
+function digestBody(dg) {
+  return dg.cats.map(c => `<div class="cat">${esc(c.name)}</div>${c.items.map(it => `<a class="news-item" href="${esc(it.u)}" target="_blank" rel="noopener">${esc(it.t)}</a>`).join("")}`).join("");
+}
+function renderNews() {
+  if (!D.digests || !D.digests.length) return `<div class="h1"><b>Новости</b></div><div class="card" style="margin-top:12px"><div class="empty">Сводок пока нет. Они появятся после следующего обновления из чата.</div></div>`;
+  const [last, ...prev] = D.digests;
+  const n = dg => dg.cats.reduce((s, c) => s + c.items.length, 0);
+  return `<div class="h1"><b>Новости</b></div><p class="lead">Сводка бота «Сводка» по постам ${ext(D.meta.digest_source, "@monomento2")}: каждый вечер в 21:00, когда набралось от 10 постов.</p>
+    <div class="sec-h" style="margin-top:12px"><span>Последняя · ${fLong(dTime(last.date))}, ${last.date.slice(11, 16)}</span>${ext(last.link, "В чате").replace("<a ", '<a class="act" ')}</div>
+    <div class="card" style="padding-bottom:6px">${digestBody(last)}</div>
+    <div class="grp">Предыдущие</div>
+    ${prev.map(dg => `<details class="prev"><summary><span>${fLong(dTime(dg.date))}, ${dg.date.slice(11, 16)}</span><span class="m" style="margin:0">${n(dg)} ${plural(n(dg), ["пост", "поста", "постов"])}</span></summary>${digestBody(dg)}<div style="height:6px"></div></details>`).join("")}`;
+}
+
+/* ---------- sheets ---------- */
+function openSheet(html) { $("sheet").innerHTML = `<div class="grab"></div>` + html; $("sheet").classList.add("on"); $("backdrop").classList.add("on"); if (tg) tg.BackButton.show(); }
+function closeSheet() { $("sheet").classList.remove("on"); $("backdrop").classList.remove("on"); if (tg) tg.BackButton.hide(); }
+function viewerSheet() {
+  const opts = [["all", "Вся Лаба", "общая картина"]].concat(D.people.map(p => {
+    const n = myTasks(p.handle).length, r = myRoles(p.handle).length;
+    return [p.handle, p.name, `${p.handle} · ${n} ${plural(n, ["задача", "задачи", "задач"])}${r ? ` · ${r} ${plural(r, ["роль", "роли", "ролей"])}` : ""}`];
+  }));
+  openSheet(`<h3>Смотреть как</h3>${opts.map(([h, name, sub]) => `<button class="opt" data-act="viewer-set" data-h="${esc(h)}">
+    <span class="ava ${h === "all" ? "all" : ""}">${h === "all" ? "Л" : esc(name.slice(0, 1))}</span><span><span class="t">${esc(name)}</span><span class="m" style="display:block;margin:0">${esc(sub)}</span></span>
+    ${S.viewer === h ? '<span class="tick">✓</span>' : ""}</button>`).join("")}
+    <p class="note">По умолчанию портал показывает тебя: Telegram передаёт аккаунт при входе. Здесь можно посмотреть на Лабу глазами коллеги.</p>`);
+}
+function taskSheet(id) {
+  const t = D.tasks.find(x => x.id === id); if (!t) return;
+  const hs = taskHandles(t), p = D.projects.find(x => x.name === t.project), isDone = doneOf(t);
+  const actor = tg ? S.me : (S.viewer !== "all" ? S.viewer : null), mine = !!actor && hs.includes(actor);
+  openSheet(`<h3>${esc(t.title)}</h3><dl class="kv">
+    <dt>Проект</dt><dd>${esc(t.project)}${t.project !== t.project_raw ? ` <span class="m" style="display:inline">(в таблице «${esc(t.project_raw)}»)</span>` : ""}</dd>
+    <dt>Кто</dt><dd>${hs.length ? hs.map(h => `${esc(nm(h))} <span class="m" style="display:inline">${esc(h)}</span>`).join("<br>") : "никто, нужны руки"}</dd>
+    <dt>Срок</dt><dd>${t.deadline ? fLong(dOnly(t.deadline)) + (dueLabel(t) ? ` · <span class="pill ${dueLabel(t).cls}">${dueLabel(t).txt}</span>` : "") : "без срока"}</dd>
+    <dt>Статус</dt><dd>${isDone ? "Готово" : esc(t.status || "без статуса")}</dd></dl>
+    <div class="stack">${!mine && !isDone ? `<button class="btn primary wide" data-act="task-take" data-id="${t.id}">Беру</button>` : ""}
+      <button class="btn wide" data-act="task-done" data-id="${t.id}">${isDone ? "Вернуть в работу" : "Готово"}</button>
+      ${p && p.topic_link ? `<a class="btn wide" style="display:grid;place-items:center;text-decoration:none" href="${esc(p.topic_link)}" target="_blank" rel="noopener">Обсуждение в топике «${esc(p.topic_title)}»</a>` : ""}</div>
+    <p class="note">«Беру» и «Готово» сразу записываются в таблицу задач, «Напоминатель» это учтёт.</p>`);
+}
+
+/* ---------- toast ---------- */
+let toastTimer;
+function toast(msg) { const el = $("toast"); el.textContent = msg; el.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove("on"), 2600); }
+
+/* ---------- render + events ---------- */
+const SCREENS = { home: renderHome, tasks: renderTasks, calendar: renderCalendar, tools: renderTools, news: renderNews };
+function render(keepScroll) {
+  if (!D) return;
+  const sc = $("screen"), y = sc.scrollTop;
+  header(); tabs(); sc.innerHTML = SCREENS[S.tab]();
+  sc.scrollTop = keepScroll ? y : 0;
+  const s = $("toolSearch");
+  if (s) s.addEventListener("input", e => { S.toolQuery = e.target.value; const pos = e.target.selectionStart; render(true); const n = $("toolSearch"); n.focus(); n.setSelectionRange(pos, pos); });
+}
+function needViewer() {
+  if (tg) { if (S.me) return true; toast("Чтобы брать задачи, задай имя пользователя (@username) в настройках Telegram."); return false; }
+  if (S.viewer !== "all") return true; toast("Сначала выбери себя в «Вся Лаба ▾» сверху."); viewerSheet(); return false;
+}
+const actorHandle = () => tg ? S.me : S.viewer;
+async function remote(action, payload, okMsg, rollback, after) {
+  if (!tg && !window.LAB_MOCK) { toast(okMsg + " (вне Telegram изменения не сохраняются)"); return; }
+  try {
+    const r = await api(action, payload);
+    if (!r.ok) throw new Error(r.error || "error");
+    haptic("success"); toast(okMsg); if (after) after(r);
+  } catch (e) {
+    rollback(); render(true);
+    if (payload.taskId && $("sheet").classList.contains("on")) taskSheet(payload.taskId);
+    haptic("error");
+    const why = { row_changed: "строку в таблице успели изменить, обнови портал", no_username: "нужен @username в настройках Telegram",
+      target_row_busy: "под задачами в таблице занята строка", not_member: "портал только для участников AI laba" }[e.message] || e.message;
+    toast("Не сохранилось: " + why);
+  }
+}
+document.getElementById("app").addEventListener("click", e => {
+  const el = e.target.closest("[data-act]"); if (!el) return;
+  if (e.target.closest("a") && el.dataset.act !== "sheet-close") return;
+  const a = el.dataset.act, id = el.dataset.id;
+  if (a !== "tool-toggle" && a !== "task-open" && a !== "project" && a !== "day") e.stopPropagation();
+  switch (a) {
+    case "tab": S.tab = el.dataset.tab; store.set("tab", S.tab); if (S.tab !== "tasks") S.project = null; render(); break;
+    case "seg-go": S.tab = "tasks"; S.seg = el.dataset.seg; S.project = null; render(); break;
+    case "seg": S.seg = el.dataset.seg; render(true); break;
+    case "proj": S.project = el.dataset.p || null; render(true); break;
+    case "project": S.tab = "tasks"; S.seg = "all"; S.project = el.dataset.p; render(); break;
+    case "cal": S.calKind = el.dataset.k; render(true); break;
+    case "day": S.day = S.day === el.dataset.d ? null : el.dataset.d; render(true); break;
+    case "viewer-open": viewerSheet(); break;
+    case "viewer-set": S.viewer = el.dataset.h; S.viewerTouched = true; store.set("viewer", S.viewer); closeSheet(); if (S.viewer === "all" && S.seg === "mine") S.seg = "all"; render(); break;
+    case "sheet-close": closeSheet(); break;
+    case "task-open": if (e.target.closest(".check")) return; taskSheet(id); break;
+    case "task-done": {
+      const t = D.tasks.find(x => x.id === id);
+      const next = !doneOf(t), prev = { done: t.done, status: t.status, local: S.done.has(id) };
+      t.done = next; t.status = next ? "Готово" : "В работе"; S.done.delete(id);
+      if ($("sheet").classList.contains("on")) taskSheet(id); render(true);
+      remote(next ? "done" : "undone", { row: t.row, title: t.title, taskId: id }, next ? `Готово: «${t.title}»` : "Вернули в работу",
+        () => { t.done = prev.done; t.status = prev.status; if (prev.local) S.done.add(id); });
+      break;
+    }
+    case "task-take": {
+      if (!needViewer()) break;
+      const t = D.tasks.find(x => x.id === id), who = actorHandle();
+      S.taken[id] = who; if ($("sheet").classList.contains("on")) taskSheet(id); render(true);
+      remote("take", { row: t.row, title: t.title, taskId: id }, `Задача теперь на тебе, ${nm(who)}.`, () => { delete S.taken[id]; });
+      break;
+    }
+    case "ask-take": {
+      if (!needViewer()) break;
+      const a = D.needs_hands[Number(id.slice(1))];
+      S.askTaken[id] = actorHandle(); render(true);
+      remote("add_task", { title: a.title, project: a.project }, `Записали: «${a.title}» теперь на тебе.`, () => { delete S.askTaken[id]; }, refresh);
+      break;
+    }
+    case "tool-toggle": S.openTool = S.openTool === Number(el.dataset.i) ? null : Number(el.dataset.i); render(true); break;
+    case "tool-status": S.toolStatus = el.dataset.s; S.openTool = null; render(true); break;
+    case "tool-take": {
+      if (!needViewer()) break;
+      const i = el.dataset.i, tool = D.tools[Number(i)];
+      S.toolMoves[i] = nm(actorHandle()); render(true);
+      remote("add_task", { title: `${tool.name}, тест`, project: "Эксперименты с ИИ" }, `${tool.name} на тесте: задача добавлена в таблицу.`, () => { delete S.toolMoves[i]; }, refresh);
+      break;
+    }
+    case "suggest": toast("Предложи инструмент в топике «Полезное»: карточка появится здесь после ближайшего обновления из чата."); break;
+    case "reload": start(); break;
+  }
+});
+document.getElementById("app").addEventListener("click", e => {
+  const a = e.target.closest("a[href]"); if (!a || !tg) return;
+  e.preventDefault();
+  const href = a.getAttribute("href");
+  if (href.indexOf("https://t.me/") === 0) tg.openTelegramLink(href); else tg.openLink(href);
+}, true);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
+function boot(title, text, retry) {
+  $("screen").innerHTML = `<div class="boot"><div><b>${esc(title)}</b>${esc(text || "")}${retry ? '<div style="margin-top:14px"><button class="btn" data-act="reload">Повторить</button></div>' : ""}</div></div>`;
+}
+function applyData(data, user) {
+  D = data;
+  if (user && user.username && !D.people.some(p => p.handle.toLowerCase() === "@" + user.username.toLowerCase())) {
+    D.people.push({ handle: "@" + user.username, name: user.first_name || "@" + user.username });
+  }
+  PEOPLE = Object.fromEntries(D.people.map(p => [p.handle, p.name]));
+  const me = user && user.username ? D.people.find(p => p.handle.toLowerCase() === "@" + user.username.toLowerCase()) : null;
+  S.me = me ? me.handle : null;
+  if (params.get("viewer")) S.viewer = params.get("viewer");
+  else if (S.me && !S.viewerTouched) S.viewer = S.me;
+  if (S.viewer !== "all" && !PEOPLE[S.viewer]) S.viewer = "all";
+  render(true);
+}
+async function refresh() { try { const r = await api("load"); if (r.ok) applyData(r.data, r.user); } catch (e) { /* keep current view */ } }
+async function start() {
+  if (tg) {
+    tg.ready(); tg.expand();
+    document.documentElement.dataset.theme = tg.colorScheme;
+    tg.onEvent("themeChanged", () => { document.documentElement.dataset.theme = tg.colorScheme; });
+    tg.BackButton.onClick(closeSheet);
+    const sp = tg.initDataUnsafe && tg.initDataUnsafe.start_param;
+    if (sp && TABS.includes(sp)) S.tab = sp;
+  }
+  header(); tabs();
+  if (!tg && !window.LAB_MOCK) { boot("Откройте портал в Telegram", "Ссылка: t.me/newsinaibot/lab. Данные Лабы видны только участникам AI laba."); return; }
+  boot("Загружаем данные Лабы", "");
+  try {
+    const r = await api("load");
+    if (!r.ok) {
+      const why = { not_member: "Портал открыт только участникам AI laba.", expired: "Сессия устарела: закрой и открой портал заново.",
+        bad_signature: "Telegram не подтвердил вход: открой портал заново." }[r.error] || ("Ошибка сервера: " + r.error);
+      boot("Нет доступа", why, r.error !== "not_member");
+      return;
+    }
+    applyData(r.data, r.user);
+    /* deep links for review: ?seg=hands&day=2026-10-14&tool=2&scroll=600&sheet=r2&pick=1 */
+    if (params.get("seg")) { S.seg = params.get("seg"); render(); }
+    if (params.get("day")) { S.day = params.get("day"); render(); }
+    if (params.get("tool")) { S.openTool = Number(params.get("tool")); render(); }
+    if (params.get("scroll")) { const sc = $("screen"); sc.style.scrollBehavior = "auto"; sc.scrollTop = Number(params.get("scroll")); }
+    if (params.get("sheet")) taskSheet(params.get("sheet"));
+    if (params.get("pick")) viewerSheet();
+  } catch (e) {
+    boot("Не удалось загрузить данные", e.message === "no_api_url" ? "В config.js не указан адрес сервера." : "Проверь соединение и попробуй ещё раз.", true);
+  }
+}
+start();
+</script>
+</body>
+</html>
