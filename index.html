@@ -335,9 +335,15 @@ const ext = (href, label) => `<a href="${esc(href)}" target="_blank" rel="noopen
 const params = new URLSearchParams(location.search);
 const store = { get(k) { try { return localStorage.getItem("ailaba." + k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem("ailaba." + k, v); } catch (e) {} } };
 const TABS = ["home", "tasks", "calendar", "tools", "news"];
+/* every open starts on Home as the person who opened it; URL deep links are for the QA build only */
+const QA_LINKS = !!window.LAB_MOCK;
+const tgUser = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe
+  ? window.Telegram.WebApp.initDataUnsafe.user : null;
+const openerHandle = tgUser && tgUser.username ? "@" + tgUser.username : null;
+try { localStorage.removeItem("ailaba.tab"); localStorage.removeItem("ailaba.viewer"); } catch (e) {}
 const S = {
-  tab: TABS.includes(params.get("tab")) ? params.get("tab") : (store.get("tab") || "home"),
-  viewer: params.get("viewer") || store.get("viewer") || "all",
+  tab: QA_LINKS && TABS.includes(params.get("tab")) ? params.get("tab") : "home",
+  viewer: openerHandle || "all",
   seg: "all", project: null, calKind: "all", calProject: null, toolStatus: "all", toolQuery: "", day: null,
   done: new Set(), taken: {}, askTaken: {}, toolMoves: {}, openTool: null,
 };
@@ -346,6 +352,7 @@ if (tg) document.documentElement.classList.add("tg");
 else if (window.self === window.top) document.documentElement.classList.add("standalone");
 
 let PEOPLE = {};
+if (openerHandle) PEOPLE[openerHandle] = tgUser.first_name || openerHandle;
 const doneOf = t => !!(t.done || S.done.has(t.id));
 const nm = h => PEOPLE[h] || h;
 const names = hs => hs.length <= 2 ? hs.map(nm).join(", ") : `${hs.slice(0, 2).map(nm).join(", ")} +${hs.length - 2}`;
@@ -784,7 +791,7 @@ document.getElementById("app").addEventListener("click", e => {
   const a = el.dataset.act, id = el.dataset.id;
   if (a !== "tool-toggle" && a !== "task-open" && a !== "project" && a !== "day") e.stopPropagation();
   switch (a) {
-    case "tab": S.tab = el.dataset.tab; store.set("tab", S.tab); if (S.tab !== "tasks") S.project = null; S.calProject = null; render(); break;
+    case "tab": S.tab = el.dataset.tab; if (S.tab !== "tasks") S.project = null; S.calProject = null; render(); break;
     case "seg-go": S.tab = "tasks"; S.seg = el.dataset.seg; S.project = null; render(); break;
     case "seg": S.seg = el.dataset.seg; render(true); break;
     case "proj": S.project = el.dataset.p || null; render(true); break;
@@ -792,7 +799,7 @@ document.getElementById("app").addEventListener("click", e => {
     case "cal": S.calKind = el.dataset.k; render(true); break;
     case "day": S.day = S.day === el.dataset.d ? null : el.dataset.d; render(true); break;
     case "viewer-open": viewerSheet(); break;
-    case "viewer-set": S.viewer = el.dataset.h; S.viewerTouched = true; store.set("viewer", S.viewer); closeSheet(); if (S.viewer === "all" && S.seg === "mine") S.seg = "all"; render(); break;
+    case "viewer-set": S.viewer = el.dataset.h; S.viewerTouched = true; closeSheet(); if (S.viewer === "all" && S.seg === "mine") S.seg = "all"; render(); break;
     case "sheet-close": closeSheet(); break;
     case "task-open": if (e.target.closest(".check")) return; taskSheet(id); break;
     case "task-done": {
@@ -867,8 +874,8 @@ document.getElementById("app").addEventListener("click", e => {
         r => { S.teamUrl = (r && r.url) || null; toast(r && r.added ? `Добавлено в таблицу: ${r.added}` : "Все уже есть в таблице"); refresh(); });
       break;
     case "proj-open": closeSheet(); projSheet(el.dataset.p); break;
-    case "proj-cal": closeSheet(); S.tab = "calendar"; S.calProject = el.dataset.p || null; S.calKind = "all"; S.day = null; store.set("tab", S.tab); render(); break;
-    case "proj-tasks": closeSheet(); S.tab = "tasks"; S.seg = "all"; S.project = el.dataset.p || null; store.set("tab", S.tab); render(); break;
+    case "proj-cal": closeSheet(); S.tab = "calendar"; S.calProject = el.dataset.p || null; S.calKind = "all"; S.day = null; render(); break;
+    case "proj-tasks": closeSheet(); S.tab = "tasks"; S.seg = "all"; S.project = el.dataset.p || null; render(); break;
     case "cal-proj": S.calProject = el.dataset.p || null; render(true); break;
     case "pt-new": if (needViewer()) pointSheet({ project: el.dataset.p || (S.tab === "calendar" ? S.calProject || "" : "") }); break;
     case "pt-due": { const f = $("ptDate"); if (f) f.value = el.dataset.d; break; }
@@ -1171,6 +1178,39 @@ function renderMeet() {
     ${past.length ? `<section class="sec"><div class="sec-h"><span>Уже обсудили</span></div><div class="card">${past.map(x => `<div class="row"><div class="grow"><div class="t">${esc(x.text)}</div><div class="m">${esc(nm(x.by))}${x.meeting ? ", обсудили " + fDay(dOnly(x.meeting)) : ""}</div></div></div>`).join("")}</div></section>` : ""}
     <p class="foot">Повестка лежит на вкладке «Повестка» в таблице Лабы. Предложить тему может любой участник, убрать тему может её автор и Антон.</p>`;
 }
+/* ---------- a return to a minimized portal is a new open (Bot API 8.0: swipe down minimizes, the same button restores) ---------- */
+let awayAt = 0, awayOwn = false, outAt = 0;
+function formDirty() {
+  const roots = [$("screen")].concat($("sheet").classList.contains("on") ? [$("sheet")] : []);
+  return roots.some(r => [...r.querySelectorAll('textarea, input:not([type="search"]), select')].some(el =>
+    el.tagName === "SELECT" ? [...el.options].some(o => o.selected !== o.defaultSelected) : el.value !== el.defaultValue));
+}
+function startView() {
+  Object.assign(S, { tab: S.startTab || "home", prevTab: S.startPrev || null,
+    seg: S.startMine && S.me && myTasks(S.me).some(t => !doneOf(t)) ? "mine" : "all",
+    project: null, calProject: null, calKind: "all", day: null,
+    openTool: null, toolQuery: "", toolStatus: "all", viewerTouched: false, viewer: S.me || "all" });
+  closeSheet(); render();
+  $("screen").scrollTop = 0;
+}
+/* a link or dialog the portal opened explains only the one exit right after it */
+function portalAway() { awayAt = Date.now(); awayOwn = awayAt - outAt < 4000; outAt = 0; }
+function portalBack() {
+  const at = awayAt, own = awayOwn; awayAt = 0; awayOwn = false;
+  if (!at || !D || formDirty()) return;
+  const away = Date.now() - at;
+  if (own && away < 30 * 60000) { if (away > 60000) refresh(); return; }
+  startView(); refresh();
+}
+if (tg) {
+  ["openLink", "openTelegramLink", "showPopup", "showConfirm", "showAlert", "requestWriteAccess", "shareMessage"].forEach(k => {
+    if (typeof tg[k] !== "function") return;
+    const f = tg[k].bind(tg);
+    try { tg[k] = function () { outAt = Date.now(); return f.apply(null, arguments); }; } catch (e) {}
+  });
+  tg.onEvent("deactivated", portalAway);
+  tg.onEvent("activated", portalBack);
+}
 function goBack() {
   if ($("sheet").classList.contains("on")) { closeSheet(); return; }
   if (S.tab === "meet" || S.tab === "team") { S.tab = TABS.includes(S.prevTab) ? S.prevTab : "home"; render(); }
@@ -1397,9 +1437,9 @@ function applyData(data, user) {
   S.me = me ? me.handle : null;
   S.owner = !!(user && user.owner);
   if (pendingDel) D[pendingDel.kind] = (D[pendingDel.kind] || []).filter(x => x.key !== pendingDel.key);
-  if (params.get("viewer")) S.viewer = params.get("viewer");
-  else if (S.me && !S.viewerTouched) S.viewer = S.me;
-  if (S.viewer !== "all" && !PEOPLE[S.viewer]) S.viewer = "all";
+  if (QA_LINKS && params.get("viewer") && !S.viewerTouched) { S.viewer = params.get("viewer"); S.viewerTouched = true; }
+  if (!S.viewerTouched) S.viewer = S.me || "all";
+  if (S.viewer !== "all" && !PEOPLE[S.viewer]) S.viewer = S.me || "all";
   render(true);
 }
 async function refresh() { try { const r = await api("load"); if (r.ok) applyData(r.data, r.user); } catch (e) { /* keep current view */ } }
@@ -1413,6 +1453,7 @@ async function start() {
     if (sp && TABS.includes(sp)) S.tab = sp;
     if (sp === "meet") { S.prevTab = "home"; S.tab = "meet"; }
     if (sp === "team") { S.prevTab = "home"; S.tab = "team"; }
+    S.startTab = S.tab; S.startPrev = S.prevTab || null; S.startMine = sp === "tasks";
   }
   header(); tabs();
   if (!tg && !window.LAB_MOCK) { boot("Откройте портал в Telegram", "Ссылка: t.me/newsinaibot/lab. Данные Лабы видны только участникам AI laba."); return; }
@@ -1428,24 +1469,24 @@ async function start() {
     applyData(r.data, r.user);
     /* «Открыть задачи» from a reminder: show the person's own open tasks when there are any */
     if (sp === "tasks" && S.me && myTasks(S.me).some(t => !doneOf(t))) { S.seg = "mine"; render(); }
-    if (params.get("tab") === "meet") { S.prevTab = "home"; S.tab = "meet"; render(); }
-    if (params.get("tab") === "team") { S.prevTab = "home"; S.tab = "team"; render(); }
-    if (params.get("person")) personSheet(params.get("person"));
-    if (params.get("tedit")) teamEditSheet(params.get("tedit") === "1" ? actorHandle() : params.get("tedit"));
-    if (params.get("due")) dueSheet(params.get("due"), "take");
-    if (params.get("nt")) newTaskSheet({ assign: params.get("nt") });
-    if (params.get("hyg")) hygSheet(params.get("hyg"));
-    if (params.get("calp")) { S.calProject = params.get("calp"); render(); }
-    if (params.get("proj")) projSheet(params.get("proj"));
-    if (params.get("pt")) { if (params.get("pt") === "new") pointSheet({ project: params.get("ptp") || "" }); else pointEdit(params.get("pt")); }
-    if (params.get("evp")) evProjSheet(params.get("evp"));
+    if (QA_LINKS && params.get("tab") === "meet") { S.prevTab = "home"; S.tab = "meet"; render(); }
+    if (QA_LINKS && params.get("tab") === "team") { S.prevTab = "home"; S.tab = "team"; render(); }
+    if (QA_LINKS && params.get("person")) personSheet(params.get("person"));
+    if (QA_LINKS && params.get("tedit")) teamEditSheet(params.get("tedit") === "1" ? actorHandle() : params.get("tedit"));
+    if (QA_LINKS && params.get("due")) dueSheet(params.get("due"), "take");
+    if (QA_LINKS && params.get("nt")) newTaskSheet({ assign: params.get("nt") });
+    if (QA_LINKS && params.get("hyg")) hygSheet(params.get("hyg"));
+    if (QA_LINKS && params.get("calp")) { S.calProject = params.get("calp"); render(); }
+    if (QA_LINKS && params.get("proj")) projSheet(params.get("proj"));
+    if (QA_LINKS && params.get("pt")) { if (params.get("pt") === "new") pointSheet({ project: params.get("ptp") || "" }); else pointEdit(params.get("pt")); }
+    if (QA_LINKS && params.get("evp")) evProjSheet(params.get("evp"));
     /* deep links for review: ?seg=hands&day=2026-10-14&tool=2&scroll=600&sheet=r2&pick=1 */
-    if (params.get("seg")) { S.seg = params.get("seg"); render(); }
-    if (params.get("day")) { S.day = params.get("day"); render(); }
-    if (params.get("tool")) { S.openTool = Number(params.get("tool")); render(); }
-    if (params.get("scroll")) { const sc = $("screen"); sc.style.scrollBehavior = "auto"; sc.scrollTop = Number(params.get("scroll")); }
-    if (params.get("sheet")) taskSheet(params.get("sheet"));
-    if (params.get("pick")) viewerSheet();
+    if (QA_LINKS && params.get("seg")) { S.seg = params.get("seg"); render(); }
+    if (QA_LINKS && params.get("day")) { S.day = params.get("day"); render(); }
+    if (QA_LINKS && params.get("tool")) { S.openTool = Number(params.get("tool")); render(); }
+    if (QA_LINKS && params.get("scroll")) { const sc = $("screen"); sc.style.scrollBehavior = "auto"; sc.scrollTop = Number(params.get("scroll")); }
+    if (QA_LINKS && params.get("sheet")) taskSheet(params.get("sheet"));
+    if (QA_LINKS && params.get("pick")) viewerSheet();
   } catch (e) {
     boot("Не удалось загрузить данные", e.message === "no_api_url" ? "В config.js не указан адрес сервера." : "Проверь соединение и попробуй ещё раз.", true);
   }
