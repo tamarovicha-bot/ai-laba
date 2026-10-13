@@ -246,6 +246,25 @@ button.meet-t { cursor: pointer; background: none; border: 0; padding: 0; text-a
 .next.none { color: var(--amber); }
 .pj-line { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 8px; }
 .pj { min-height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--accent-bg); color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; }
+.ava { --h: 210; width: 40px; height: 40px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  font-size: 15px; font-weight: 600; letter-spacing: .02em; color: hsl(var(--h) 42% 36%); background: hsl(var(--h) 60% 55% / .16); }
+.ava.sm { width: 24px; height: 24px; font-size: 11px; }
+.ava.lg { width: 56px; height: 56px; font-size: 21px; }
+:root[data-theme="dark"] .ava { color: hsl(var(--h) 70% 76%); background: hsl(var(--h) 45% 55% / .22); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ava { color: hsl(var(--h) 70% 76%); background: hsl(var(--h) 45% 55% / .22); } }
+.avas { display: flex; flex: none; align-self: center; }
+.avas .ava { width: 30px; height: 30px; font-size: 12px; box-shadow: 0 0 0 2px var(--bg); }
+.avas .ava + .ava { margin-left: -8px; }
+.clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pjs { color: var(--accent); }
+.person-h { display: flex; gap: 14px; align-items: center; margin: 2px 0 14px; }
+.person-h h3 { margin: 0 0 2px; }
+.txt { margin: 0 4px 6px; font-size: 14.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.crew { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 4px; }
+.who { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px 0 6px; border: 0; border-radius: 18px;
+  background: var(--bg2); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+button.lnk { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-align: left; }
+.card.nudge { box-shadow: inset 0 0 0 1px var(--accent); }
 </style>
 </head>
 <body>
@@ -495,7 +514,7 @@ function homeProjects() {
   return `<section class="sec"><div class="sec-h"><span>Проекты · ${D.projects.length}</span><button class="act" data-act="pt-new" data-p="">+ Точка</button></div><div class="card">${rows}</div></section>`;
 }
 function renderHome() {
-  return homeAttention() + homeOwner() + homeRibbon() + homeDecisions() + homeProjects() +
+  return homeAttention() + homeOwner() + homeRibbon() + homeDecisions() + homeProjects() + homeTeam() +
     `<p class="foot">Задачи и проекты берутся из «Таблицы задач и проектов Лабы» при каждом открытии. Решения, ивенты, инструменты и сводки обновляются из чата${D.meta.export_until ? ", последний раз " + fLong(dTime(D.meta.export_until)) : ""}. У каждой карточки есть ссылка на исходное сообщение.</p>`;
 }
 
@@ -609,7 +628,7 @@ function renderNews() {
 
 /* ---------- sheets ---------- */
 function openSheet(html) { $("sheet").innerHTML = `<div class="grab"></div>` + html; $("sheet").classList.add("on"); $("backdrop").classList.add("on"); if (tg) tg.BackButton.show(); }
-function closeSheet() { $("sheet").classList.remove("on"); $("backdrop").classList.remove("on"); if (tg) { if (S.tab === "meet") tg.BackButton.show(); else tg.BackButton.hide(); } }
+function closeSheet() { $("sheet").classList.remove("on"); $("backdrop").classList.remove("on"); if (tg) { if (S.tab === "meet" || S.tab === "team") tg.BackButton.show(); else tg.BackButton.hide(); } }
 function viewerSheet() {
   const opts = [["all", "Вся Лаба", "общая картина"]].concat(D.people.map(p => {
     const n = myTasks(p.handle).length, r = myRoles(p.handle).length;
@@ -626,7 +645,7 @@ function taskSheet(id) {
   const actor = tg ? S.me : (S.viewer !== "all" ? S.viewer : null), mine = !!actor && hs.some(h => h.toLowerCase() === actor.toLowerCase());
   openSheet(`<h3>${esc(t.title)}</h3><dl class="kv">
     <dt>Проект</dt><dd>${esc(t.project)}${t.project !== t.project_raw ? ` <span class="m" style="display:inline">(в таблице «${esc(t.project_raw)}»)</span>` : ""}</dd>
-    <dt>Кто</dt><dd>${hs.length ? hs.map(h => `${esc(nm(h))} <span class="m" style="display:inline">${esc(h)}</span>`).join("<br>") : "никто, нужны руки"}</dd>
+    <dt>Кто</dt><dd>${hs.length ? hs.map(h => `<button class="lnk" data-act="person-open" data-h="${esc(h)}">${esc(nm(h))}</button> <span class="m" style="display:inline">${esc(h)}</span>`).join("<br>") : "никто, нужны руки"}</dd>
     <dt>Срок</dt><dd>${t.deadline ? fLong(dOnly(t.deadline)) + (dueLabel(t) ? ` · <span class="pill ${dueLabel(t).cls}">${dueLabel(t).txt}</span>` : "") : "без срока"}</dd>
     <dt>Статус</dt><dd>${isDone ? "Готово" : esc(t.status || "без статуса")}</dd></dl>
     <div class="stack">${!mine && !isDone ? `<button class="btn primary wide" data-act="task-take" data-id="${t.id}">Беру</button>` : ""}
@@ -642,7 +661,7 @@ let toastTimer;
 function toast(msg) { const el = $("toast"); el.textContent = msg; el.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove("on"), 2600); }
 
 /* ---------- render + events ---------- */
-const SCREENS = { home: renderHome, tasks: renderTasks, calendar: renderCalendar, tools: renderTools, news: renderNews, meet: renderMeet };
+const SCREENS = { home: renderHome, tasks: renderTasks, calendar: renderCalendar, tools: renderTools, news: renderNews, meet: renderMeet, team: renderTeam };
 function render(keepScroll) {
   if (!D) return;
   const sc = $("screen"), y = sc.scrollTop;
@@ -650,7 +669,7 @@ function render(keepScroll) {
   sc.scrollTop = keepScroll ? y : 0;
   const agBox = $("agText");
   if (agBox) agBox.addEventListener("input", e => { S.agDraft = e.target.value; });
-  if (tg) { if (S.tab === "meet" || $("sheet").classList.contains("on")) tg.BackButton.show(); else tg.BackButton.hide(); }
+  if (tg) { if (S.tab === "meet" || S.tab === "team" || $("sheet").classList.contains("on")) tg.BackButton.show(); else tg.BackButton.hide(); }
   const s = $("toolSearch");
   if (s) s.addEventListener("input", e => { S.toolQuery = e.target.value; const pos = e.target.selectionStart; render(true); const n = $("toolSearch"); n.focus(); n.setSelectionRange(pos, pos); });
 }
@@ -681,6 +700,7 @@ async function remote(action, payload, okMsg, rollback, after) {
       bad_item: "повестка уже изменилась, обнови портал",
       agenda_broken: "на вкладке «Повестка» нужны столбцы id, Пункт и Статус",
       marks_full: "отметок слишком много, напиши Антону",
+      bad_handle: "ник указан неверно", team_broken: "на вкладке «Команда» нужны столбцы Ник, О себе, Ранее и Показывать",
       bad_project: "такого проекта нет в таблице", points_full: "у проекта уже 12 будущих точек",
       point_closed: "эту точку уже убрали", links_full: "привязок слишком много, напиши Антону",
       points_broken: "на вкладке «Точки» нужны столбцы id, Проект, Точка, Дата и Статус",
@@ -798,6 +818,46 @@ document.getElementById("app").addEventListener("click", e => {
     }
     case "card-del": if (S.owner) cardDelete(el.dataset.kind, el.dataset.key); break;
     case "undo-del": undoDelete(); break;
+    case "team-open": if (S.tab !== "team" && S.tab !== "meet") S.prevTab = S.tab; S.tab = "team"; closeSheet(); render(); break;
+    case "person-open": personSheet(el.dataset.h); break;
+    case "team-edit": teamEditSheet(el.dataset.h || actorHandle()); break;
+    case "team-save": {
+      const h = el.dataset.h, self = lc(h) === lc(actorHandle());
+      const val = id => (($(id) || {}).value || "").replace(/\s+/g, " ").trim();
+      const about = val("tmAbout"), past = val("tmPast"), name = val("tmName"), draft = { about, past, name };
+      D.team = D.team || [];
+      let c = teamCard(h); const had = !!c, prev = c ? Object.assign({}, c) : null;
+      const p = personOf(h), prevName = p ? p.name : null;
+      if (!c) { c = { handle: (p && p.handle) || h }; D.team.push(c); }
+      Object.assign(c, { about, past }); if (name) c.name = name;
+      if (name && p) { p.name = name; PEOPLE[p.handle] = name; }
+      closeSheet(); render(true);
+      remote("team_save", Object.assign({ about, past }, self ? {} : { handle: h }, name ? { name } : {}), "Карточка сохранена",
+        () => { if (had) { Object.keys(c).forEach(k => delete c[k]); Object.assign(c, prev); } else D.team = D.team.filter(x => x !== c);
+          if (p) { p.name = prevName; PEOPLE[p.handle] = prevName; } teamEditSheet(h, draft); });
+      break;
+    }
+    case "team-hide": case "team-show": {
+      const h = actorHandle(); if (!h) { toast("Нужен @username в настройках Telegram"); break; }
+      const hide = a === "team-hide";
+      const go = () => {
+        D.team = D.team || [];
+        let c = teamCard(h); const had = !!c, prev = c ? Object.assign({}, c) : null;
+        if (!c) { c = { handle: h }; D.team.push(c); }
+        c.hidden = hide;
+        closeSheet(); render(true);
+        remote("team_hide", { hidden: hide }, hide ? "Карточка скрыта из «Команды»" : "Карточка снова в «Команде»",
+          () => { if (had) { Object.keys(c).forEach(k => delete c[k]); Object.assign(c, prev); } else D.team = D.team.filter(x => x !== c); },
+          () => refresh());
+      };
+      if (hide) confirmAsk("Скрыть твою карточку из «Команды»? Задачи и роли останутся видны в портале.", go); else go();
+      break;
+    }
+    case "team-seed":
+      if (!S.owner) break;
+      remote("team_seed", {}, "Вкладка «Команда» обновлена", () => {},
+        r => { S.teamUrl = (r && r.url) || null; toast(r && r.added ? `Добавлено в таблицу: ${r.added}` : "Все уже есть в таблице"); refresh(); });
+      break;
     case "proj-open": closeSheet(); projSheet(el.dataset.p); break;
     case "proj-cal": closeSheet(); S.tab = "calendar"; S.calProject = el.dataset.p || null; S.calKind = "all"; S.day = null; store.set("tab", S.tab); render(); break;
     case "proj-tasks": closeSheet(); S.tab = "tasks"; S.seg = "all"; S.project = el.dataset.p || null; store.set("tab", S.tab); render(); break;
@@ -1041,7 +1101,7 @@ function markMade(key, r, title) {
   if (x) x.made = { row: r && r.row, title };
 }
 function homeOwner() {
-  if (!S.owner) return "";
+  if (!ownerView()) return "";
   const open = D.tasks.filter(t => !doneOf(t));
   const noDue = open.filter(t => !t.deadline), over = open.filter(t => bucket(t) === "overdue"), free = open.filter(t => !taskHandles(t).length);
   const idle = D.projects.filter(p => !open.some(t => t.project === p.name));
@@ -1105,7 +1165,7 @@ function renderMeet() {
 }
 function goBack() {
   if ($("sheet").classList.contains("on")) { closeSheet(); return; }
-  if (S.tab === "meet") { S.tab = S.prevTab || "home"; render(); }
+  if (S.tab === "meet" || S.tab === "team") { S.tab = TABS.includes(S.prevTab) ? S.prevTab : "home"; render(); }
 }
 
 /* ---------- calendar: meetings as events, who from the Lab takes part ---------- */
@@ -1168,6 +1228,7 @@ function projSheet(name) {
     <div class="grow"><div class="t">${esc(cap(projTrim(it.title, name)))}</div><div class="m">${esc(sub(it))}</div></div></div>`;
   openSheet(`<h3>${esc(name)}</h3>
     <p class="m" style="margin:-4px 0 12px">${ts.length} ${plural(ts.length, ["задача", "задачи", "задач"])} в работе${over ? `, ${over} ${plural(over, ["просрочена", "просрочены", "просрочено"])}` : ""}${p.topic ? `, в чате ${ago(p.last)}` : ""}</p>
+    ${projCrew(name)}
     <div class="grp">Следующие точки</div>
     <div class="card" style="background:var(--bg2)">${items.slice(0, 6).map(row).join("") || `<div class="empty">Следующая точка не назначена. Добавь ближайшую: что и к какому числу должно быть готово.</div>`}
       ${items.length > 6 ? `<div class="row tap" data-act="proj-cal" data-p="${esc(name)}"><div class="grow m">Ещё ${items.length - 6} в календаре</div><span class="chev">›</span></div>` : ""}</div>
@@ -1210,6 +1271,111 @@ function evProjSheet(key) {
       ${ev.project_by === "owner" ? `<button class="btn wide" data-act="ev-proj-set" data-k="${esc(key)}" data-p="*auto">Определять автоматически</button>` : ""}</div>
     <p class="note">${how} Выбор видят все.</p>`);
 }
+/* ---------- team: people cards (tab «Команда» of the table) ---------- */
+function lc(h) { return String(h || "").toLowerCase(); }
+/* owner-only info shows in the owner's own view; «Смотреть как» another person shows what that person sees */
+function ownerView() { return !!S.owner && (S.viewer === "all" || lc(S.viewer) === lc(S.me)); }
+function personOf(h) { return ((D && D.people) || []).find(p => lc(p.handle) === lc(h)) || null; }
+function teamCard(h) { return ((D && D.team) || []).find(x => lc(x.handle) === lc(h)) || null; }
+function teamList() {
+  const me = lc(actorHandle());
+  return ((D && D.people) || []).filter(p => !(teamCard(p.handle) || {}).hidden)
+    .sort((a, b) => (lc(a.handle) === me ? -1 : lc(b.handle) === me ? 1 : String(nm(a.handle)).localeCompare(String(nm(b.handle)), "ru")));
+}
+function avatar(h, size) {
+  const name = String(nm(h) || h || "?").replace(/^@/, "").trim(), parts = name.split(/\s+/).filter(Boolean);
+  const ini = parts.length > 1 ? parts[0][0] + parts[1][0] : (parts[0] || "?")[0];
+  let x = 7; for (const c of lc(h)) x = (x * 31 + c.charCodeAt(0)) % 100003;
+  return `<span class="ava ${size || ""}" style="--h:${x % 360}" aria-hidden="true">${esc(ini.toUpperCase())}</span>`;
+}
+function personNow(h) {
+  const k = lc(h);
+  const tasks = D.tasks.filter(t => !doneOf(t) && taskHandles(t).some(x => lc(x) === k));
+  const roles = (D.roles || []).filter(r => (r.handles || []).some(x => lc(x) === k) && (!r.date || dOnly(r.date) >= today));
+  const going = (D.events || []).filter(e => (e.going || []).some(x => lc(x) === k) && e.date && dOnly(e.end || e.date) >= today);
+  return { tasks, roles, going, projects: [...new Set(tasks.map(t => t.project).filter(Boolean))] };
+}
+function homeTeam() {
+  if (!D.people || !D.people.length) return "";
+  const list = teamList(), me = actorHandle(), mine = me ? teamCard(me) : null;
+  const empty = !!(tg && me && !(mine && (mine.about || mine.hidden)));
+  return `<section class="sec"><div class="card"><div class="row tap" data-act="team-open">
+    <div class="avas">${list.slice(0, 4).map(p => avatar(p.handle)).join("")}</div>
+    <div class="grow"><div class="t"><b>Команда</b> · ${list.length} ${plural(list.length, ["человек", "человека", "человек"])}</div>
+      <div class="m"${empty ? ' style="color:var(--amber)"' : ""}>${empty ? "Твоя карточка пустая: расскажи о себе" : "Кто чем занимается и в каких проектах"}</div></div>
+    <span class="chev">›</span></div></div></section>`;
+}
+function teamRow(p) {
+  const c = teamCard(p.handle) || {}, now = personNow(p.handle), self = !!tg && lc(p.handle) === lc(actorHandle());
+  return `<div class="row tap" data-act="person-open" data-h="${esc(p.handle)}">${avatar(p.handle)}
+    <div class="grow"><div class="t"><b>${esc(nm(p.handle))}</b>${self ? ' <span class="pill p-mute">это ты</span>' : ""}</div>
+      <div class="m clamp2">${c.about ? esc(c.about) : "О себе пока не написано"}</div>
+      ${now.projects.length ? `<div class="m pjs">${esc(now.projects.join(" · "))}</div>` : ""}</div>
+    <span class="chev">›</span></div>`;
+}
+function renderTeam() {
+  const list = teamList(), me = actorHandle(), mine = me ? teamCard(me) : null;
+  const filled = list.filter(p => (teamCard(p.handle) || {}).about).length;
+  let nudge = "";
+  if (tg && me && mine && mine.hidden) nudge = `<div class="card nudge" style="margin-top:12px"><div class="row">${avatar(me)}<div class="grow"><div class="t"><b>Твоя карточка скрыта</b></div><div class="m">В «Команде» её не видят другие. Задачи и роли видны как обычно.</div></div><button class="btn mini" data-act="team-show">Показать</button></div></div>`;
+  else if (tg && me && !(mine && mine.about)) nudge = `<div class="card nudge" style="margin-top:12px"><div class="row tap" data-act="team-edit" data-h="${esc(me)}">${avatar(me)}<div class="grow"><div class="t"><b>Расскажи о себе</b></div><div class="m">Две-три строки: чем занимаешься и о чём тебя можно спросить</div></div><span class="chev">›</span></div></div>`;
+  const owner = ownerView() ? `<section class="sec"><div class="sec-h"><span>Для Антона</span><span style="text-transform:none;letter-spacing:0">видишь только ты</span></div><div class="card">
+      <div class="row tap" data-act="team-seed"><div class="grow"><div class="t"><b>Заполнить вкладку «Команда»</b></div><div class="m">Добавит в таблицу всех, кого знает портал, с именами, чтобы писать описания прямо там. Описание есть у ${filled} из ${list.length}.</div></div><span class="chev">›</span></div>
+      ${S.teamUrl ? `<div class="row"><div class="grow m">${ext(S.teamUrl, "Открыть вкладку «Команда»")}</div></div>` : ""}</div></section>` : "";
+  return `<div class="h1"><b>Команда</b></div>
+    <p class="lead">Кто есть кто в Лабе. «О себе» и «Ранее» пишет сам человек, «Сейчас» портал собирает из задач, ролей и отметок «Участвую».</p>
+    ${nudge}<div class="card" style="margin-top:12px">${list.map(teamRow).join("") || `<div class="empty">Пока никого нет.</div>`}</div>
+    ${owner}
+    <p class="foot">Карточки хранятся на вкладке «Команда» в таблице Лабы. Поправить или скрыть свою карточку можно, открыв её.</p>`;
+}
+function personSheet(h) {
+  const p = personOf(h), c = teamCard(h) || {}, handle = p ? p.handle : (c.handle || h);
+  if (!handle) return;
+  const self = !!tg && lc(handle) === lc(actorHandle()), canEdit = self || S.owner, now = personNow(handle);
+  const hist = ((D && D.history) || {})[lc(handle)] || [], nick = String(handle).replace(/^@/, "");
+  const rows = now.tasks.map(t => `<div class="row tap" data-act="task-open" data-id="${t.id}"><div class="grow"><div class="t">${esc(t.title)}</div><div class="m">${esc(t.project || "без проекта")}${!t.deadline ? "" : bucket(t) === "overdue" ? `, <span style="color:var(--red)">срок был ${fDay(dOnly(t.deadline))}</span>` : ", до " + fDay(dOnly(t.deadline))}</div></div><span class="chev">›</span></div>`)
+    .concat(now.roles.map(r => `<div class="row"><div class="grow"><div class="t">${esc(r.title)}</div><div class="m">роль${r.date ? ", " + fDay(dOnly(r.date)) : ""}</div></div></div>`))
+    .concat(now.going.map(e => `<div class="row"><div class="grow"><div class="t">${esc(e.title)}</div><div class="m">участвует, ${fDay(dOnly(e.date))}</div></div></div>`));
+  const past = c.hidden ? "" : `<div class="grp">Ранее</div>
+    ${c.past ? `<div class="txt">${esc(c.past)}</div>` : ""}
+    ${hist.length ? `<div class="m" style="margin:0 4px">Закрытые в портале задачи: ${hist.map(x => `${esc(x.project)} (${x.n})`).join(", ")}</div>` : ""}
+    ${!c.past && !hist.length ? `<div class="txt"><span class="m">Пока пусто.</span></div>` : ""}`;
+  openSheet(`<div class="person-h">${avatar(handle, "lg")}<div class="grow"><h3>${esc(nm(handle))}</h3><div class="m">${esc(handle)}</div></div></div>
+    ${c.hidden ? `<p class="note" style="margin:0 0 10px">${self ? "Твоя карточка скрыта: в «Команде» её не видят другие." : "Человек скрыл карточку: видны только задачи и роли."}</p>` : ""}
+    ${!self ? `<a class="btn wide" href="https://t.me/${esc(nick)}" target="_blank" rel="noopener" style="display:grid;place-items:center;text-decoration:none">Написать в Telegram</a>` : ""}
+    ${c.hidden ? "" : `<div class="grp">О себе</div><div class="txt">${c.about ? esc(c.about) : `<span class="m">Пока не написано.</span>`}</div>`}
+    <div class="grp">Сейчас</div>
+    <div class="card" style="background:var(--bg2)">${rows.join("") || `<div class="empty">Открытых задач и ролей сейчас нет.</div>`}</div>
+    ${past}
+    ${canEdit && !c.hidden ? `<div class="stack" style="margin-top:14px"><button class="btn wide${self && !c.about ? " primary" : ""}" data-act="team-edit" data-h="${esc(handle)}">${self ? (c.about ? "Изменить мою карточку" : "Рассказать о себе") : "Изменить карточку"}</button>
+      ${self ? `<button class="btn wide" data-act="team-hide">Скрыть мою карточку</button>` : ""}</div>` : ""}
+    ${self && c.hidden ? `<div class="stack" style="margin-top:14px"><button class="btn wide primary" data-act="team-show">Показать мою карточку</button></div>` : ""}`);
+}
+function teamEditSheet(h, draft) {
+  const me = actorHandle();
+  if (!h || !me) { toast("Нужен @username в настройках Telegram"); return; }
+  const self = lc(h) === lc(me);
+  if (!self && !S.owner) return;
+  const c = teamCard(h) || {};
+  if (c.hidden) { toast("Карточка скрыта. Покажи её, чтобы поправить."); return; }
+  const v = Object.assign({ name: c.name || (nm(h) !== h ? nm(h) : ""), about: c.about || "", past: c.past || "" }, draft || {});
+  openSheet(`<h3>${self ? "Моя карточка" : "Карточка: " + esc(nm(h))}</h3>
+    <label class="fld"><span>Имя</span><input class="inp" id="tmName" maxlength="60" value="${esc(v.name)}" placeholder="Как называть в Лабе"></label>
+    <label class="fld"><span>О себе</span><textarea class="inp" id="tmAbout" rows="3" maxlength="300" placeholder="Чем занимается, о чём можно спросить">${esc(v.about)}</textarea></label>
+    <label class="fld"><span>Ранее</span><textarea class="inp" id="tmPast" rows="3" maxlength="300" placeholder="Проекты Лабы: доклады, клубы, статьи">${esc(v.past)}</textarea></label>
+    <button class="btn primary wide" data-act="team-save" data-h="${esc(h)}">Сохранить</button>
+    <p class="note">Карточку видят все участники Лабы. До 300 знаков в поле. ${self ? "Антон тоже может её поправить." : "Человек увидит правку в своей карточке."} Хранится на вкладке «Команда» в таблице.</p>`);
+}
+function projCrew(name) {
+  const now = [], seen = new Set();
+  D.tasks.filter(t => t.project === name && !doneOf(t)).forEach(t => taskHandles(t).forEach(h => { if (!seen.has(lc(h))) { seen.add(lc(h)); now.push(h); } }));
+  const hist = (D && D.history) || {};
+  const past = Object.keys(hist).filter(k => !seen.has(k) && (hist[k] || []).some(x => x.project === name)).map(k => (personOf(k) || { handle: k }).handle);
+  if (!now.length && !past.length) return "";
+  return `<div class="grp">Кто в проекте</div>
+    <div class="crew">${now.map(h => `<button class="who" data-act="person-open" data-h="${esc(h)}">${avatar(h, "sm")}<span>${esc(nm(h))}</span></button>`).join("") || `<span class="m" style="margin:0 4px">Сейчас задач ни у кого нет.</span>`}</div>
+    ${past.length ? `<div class="m" style="margin:2px 4px 0">Ранее: ${past.map(h => `<button class="lnk" data-act="person-open" data-h="${esc(h)}">${esc(nm(h))}</button>`).join(", ")}</div>` : ""}`;
+}
 function boot(title, text, retry) {
   $("screen").innerHTML = `<div class="boot"><div><b>${esc(title)}</b>${esc(text || "")}${retry ? '<div style="margin-top:14px"><button class="btn" data-act="reload">Повторить</button></div>' : ""}</div></div>`;
 }
@@ -1238,6 +1404,7 @@ async function start() {
     tg.BackButton.onClick(goBack);
     if (sp && TABS.includes(sp)) S.tab = sp;
     if (sp === "meet") { S.prevTab = "home"; S.tab = "meet"; }
+    if (sp === "team") { S.prevTab = "home"; S.tab = "team"; }
   }
   header(); tabs();
   if (!tg && !window.LAB_MOCK) { boot("Откройте портал в Telegram", "Ссылка: t.me/newsinaibot/lab. Данные Лабы видны только участникам AI laba."); return; }
@@ -1254,6 +1421,9 @@ async function start() {
     /* «Открыть задачи» from a reminder: show the person's own open tasks when there are any */
     if (sp === "tasks" && S.me && myTasks(S.me).some(t => !doneOf(t))) { S.seg = "mine"; render(); }
     if (params.get("tab") === "meet") { S.prevTab = "home"; S.tab = "meet"; render(); }
+    if (params.get("tab") === "team") { S.prevTab = "home"; S.tab = "team"; render(); }
+    if (params.get("person")) personSheet(params.get("person"));
+    if (params.get("tedit")) teamEditSheet(params.get("tedit") === "1" ? actorHandle() : params.get("tedit"));
     if (params.get("due")) dueSheet(params.get("due"), "take");
     if (params.get("nt")) newTaskSheet({ assign: params.get("nt") });
     if (params.get("hyg")) hygSheet(params.get("hyg"));
