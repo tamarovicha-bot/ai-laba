@@ -445,11 +445,11 @@ function homeAttention() {
   const order = { overdue: 0, today: 1, week: 2, later: 3, nodate: 4, done: 5 };
   const tRows = tasks.sort((a, b) => order[bucket(a)] - order[bucket(b)]).map(t => taskRow(t, { hideWho: true })).join("");
   const rRows = roles.map(r => {
-    const d = dOnly(r.date), n = diff(today, d);
-    return `<div class="row"><div class="datecol"><b>${d.getDate()}</b><small>${MON[d.getMonth()]}</small></div>
+    const d = r.date ? dOnly(r.date) : null, n = d ? diff(today, d) : null;
+    return `<div class="row"><div class="datecol">${d ? `<b>${d.getDate()}</b><small>${MON[d.getMonth()]}</small>` : "<small>без даты</small>"}</div>
       <div class="grow"><div class="t">${esc(r.title)}</div><div class="m">${esc(r.note)}</div>
       <div class="links">${ext(r.links[0], "Решение в чате")}</div></div>
-      <span class="pill ${n <= 3 ? "p-amber" : "p-accent"}">${n < 0 ? "прошло" : n === 0 ? "сегодня" : "через " + n + " " + plural(n, ["день", "дня", "дней"])}</span></div>`;
+      ${d ? `<span class="pill ${n <= 3 ? "p-amber" : "p-accent"}">${n < 0 ? "прошло" : n === 0 ? "сегодня" : "через " + n + " " + plural(n, ["день", "дня", "дней"])}</span>` : ""}</div>`;
   }).join("");
   return `<section class="sec"><div class="sec-h"><span>Что ждут от тебя, ${esc(name)}</span><button class="act" data-act="seg-go" data-seg="mine">Мои задачи</button></div>
     <div class="card">${tRows}${rRows}${!tRows && !rRows ? `<div class="empty">Сейчас на тебе ничего нет. Загляни в «Нужны руки».</div>` : ""}
@@ -596,7 +596,7 @@ function renderTools() {
     return `<div class="row tool tap ${S.openTool === i ? "open" : ""}" data-act="tool-toggle" data-i="${i}">
       <div class="grow"><div class="t"><b>${esc(t.name)}</b> <span class="m" style="display:inline">${esc(t.cat)}</span></div>
       <div class="what">${esc(t.what)}</div>${t.verdict ? `<div class="verdict"><span>Отзыв.</span> ${esc(t.verdict)}</div>` : ""}
-      <div class="m">${t.who ? esc(t.who) + " · " : ""}${fDay(dOnly(t.date))}${t.task ? " · задача в таблице" : ""}</div>
+      <div class="m">${[t.who ? esc(t.who) : "", t.date ? fDay(dOnly(t.date)) : ""].filter(Boolean).join(" · ")}${t.task ? " · задача в таблице" : ""}</div>
       <div class="links extra">${ext(t.links[0], "Источник в чате")}${t.links[1] ? ext(t.links[1], "Обсуждение") : ""}</div>
       ${canTake || (S.owner && t.key && S.openTool === i) ? `<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">${canTake ? `<button class="btn" data-act="tool-take" data-i="${i}">Беру на тест</button>` : ""}${S.owner && t.key && S.openTool === i ? `<button class="btn danger" data-act="card-del" data-kind="tools" data-key="${esc(t.key)}">Удалить</button>` : ""}</div>` : ""}</div>
       <span class="pill ${ST_CLS[t.status]}">${esc(t.status)}</span></div>`;
@@ -665,7 +665,15 @@ const SCREENS = { home: renderHome, tasks: renderTasks, calendar: renderCalendar
 function render(keepScroll) {
   if (!D) return;
   const sc = $("screen"), y = sc.scrollTop;
-  header(); tabs(); sc.innerHTML = SCREENS[S.tab]();
+  header(); tabs();
+  let html;
+  try { html = (SCREENS[S.tab] || SCREENS.home)(); }
+  catch (e) {
+    if (window.__QA) window.__QA.errors.push("render " + S.tab + ": " + e.message);
+    if (window.console) console.error(e);
+    html = `<div class="card" style="margin-top:14px"><div class="empty">Этот раздел не открылся из-за ошибки в данных (${esc(e.message)}). Остальные вкладки работают. Напиши Антону.</div></div>`;
+  }
+  sc.innerHTML = html;
   sc.scrollTop = keepScroll ? y : 0;
   const agBox = $("agText");
   if (agBox) agBox.addEventListener("input", e => { S.agDraft = e.target.value; });
