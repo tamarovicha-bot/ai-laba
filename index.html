@@ -242,6 +242,10 @@ button.meet-t { cursor: pointer; background: none; border: 0; padding: 0; text-a
 .ev-act { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
 .btn.mini[aria-pressed="true"] { background: var(--btn); color: var(--btn-ink); }
 .ev-task { background: none; border: 0; padding: 0; font: inherit; font-size: 13px; color: var(--accent); text-align: left; cursor: pointer; }
+.next { margin-top: 3px; font-size: 14px; line-height: 1.35; color: var(--ink); }
+.next.none { color: var(--amber); }
+.pj-line { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 8px; }
+.pj { min-height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--accent-bg); color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -315,7 +319,7 @@ const TABS = ["home", "tasks", "calendar", "tools", "news"];
 const S = {
   tab: TABS.includes(params.get("tab")) ? params.get("tab") : (store.get("tab") || "home"),
   viewer: params.get("viewer") || store.get("viewer") || "all",
-  seg: "all", project: null, calKind: "all", toolStatus: "all", toolQuery: "", day: null,
+  seg: "all", project: null, calKind: "all", calProject: null, toolStatus: "all", toolQuery: "", day: null,
   done: new Set(), taken: {}, askTaken: {}, toolMoves: {}, openTool: null,
 };
 if (params.get("theme")) document.documentElement.dataset.theme = params.get("theme");
@@ -360,9 +364,10 @@ function timeline(viewer) {
     if (!t.deadline || doneOf(t)) return;
     if (viewer !== "all" && !taskHandles(t).includes(viewer)) return;
     const d = dOnly(t.deadline);
-    items.push({ kind: "task", title: t.title, note: `${t.project} · ${names(taskHandles(t)) || "без исполнителя"}`, start: d, stop: d, taskId: t.id });
+    items.push({ kind: "task", title: t.title, note: `${t.project} · ${names(taskHandles(t)) || "без исполнителя"}`, start: d, stop: d, taskId: t.id, project: t.project });
   });
   meetingsAhead(27).forEach(m => items.push(m));
+  pointItems().forEach(p => items.push(p));
   return items.sort((a, b) => a.start - b.start);
 }
 const KIND = { lab: ["Лаба", "p-accent", "k-lab"], deadline: ["Подача", "p-amber", "k-deadline"], external: ["Внешнее", "p-mute", "k-external"], task: ["Задача", "p-mute", "k-task"] };
@@ -451,9 +456,9 @@ function homeRibbon() {
     list = items.filter(it => it.start <= d && it.stop >= d);
   } else list = items.filter(it => it.stop >= today).slice(0, 5);
   const later = items.filter(it => it.start > end).length;
-  const rows = list.map(it => `<div class="row ${it.taskId || it.meet ? "tap" : ""}" ${it.taskId ? `data-act="task-open" data-id="${it.taskId}"` : it.meet ? 'data-act="meet-open"' : ""}>
+  const rows = list.map(it => `<div class="row ${it.taskId || it.meet || it.point ? "tap" : ""}" ${it.taskId ? `data-act="task-open" data-id="${it.taskId}"` : it.meet ? 'data-act="meet-open"' : it.point ? `data-act="pt-open" data-id="${esc(it.pid)}"` : ""}>
       <div class="datecol"><b>${it.start.getDate()}</b><small>${MON[it.start.getMonth()]}</small></div>
-      <div class="grow"><div class="t">${esc(it.title)}</div><div class="m">${esc(it.note || "")}${it.end ? (it.note ? " · " : "") + "до " + fDay(it.stop) : ""}</div></div>
+      <div class="grow"><div class="t">${esc(it.title)}</div><div class="m">${esc(ribNote(it))}${it.end ? (ribNote(it) ? " · " : "") + "до " + fDay(it.stop) : ""}</div></div>
       <span class="pill ${KIND[it.kind][1]}">${KIND[it.kind][0]}</span></div>`).join("");
   return `<section class="sec"><div class="sec-h"><span>Ближайшие 4 недели</span><button class="act" data-act="tab" data-tab="calendar">Календарь</button></div>
     <div class="card"><div class="ribbon-wrap">
@@ -477,17 +482,17 @@ function homeDecisions() {
 function homeProjects() {
   const rows = D.projects.map(p => {
     const ts = D.tasks.filter(t => t.project === p.name && !doneOf(t));
-    const nextDue = ts.filter(t => t.deadline).map(t => dOnly(t.deadline)).sort((a, b) => a - b)[0];
-    const over = ts.filter(t => bucket(t) === "overdue").length;
+    const over = ts.filter(t => bucket(t) === "overdue").length, nx = projNext(p.name);
     const bits = [`${ts.length} ${plural(ts.length, ["задача", "задачи", "задач"])}`];
     if (over) bits.push(`<span style="color:var(--red)">${over} ${plural(over, ["просрочена", "просрочены", "просрочено"])}</span>`);
-    else if (nextDue) bits.push(`срок ${fDay(nextDue)}`);
+    if (nx.length > 1) bits.push(`ещё ${nx.length - 1} ${plural(nx.length - 1, ["точка", "точки", "точек"])}`);
     bits.push(p.topic ? `в чате ${ago(p.last)}` : "без топика");
-    return `<div class="row tap" data-act="project" data-p="${esc(p.name)}"><div class="grow"><div class="t"><b>${esc(p.name)}</b></div>
-      <div class="m">${bits.join(" · ")}</div>
-      <div class="links">${p.topic_link ? `<a href="${esc(p.topic_link)}" target="_blank" rel="noopener">Топик «${esc(p.topic_title)}»</a>` : ""}${p.link ? `<a href="${esc(p.link)}" target="_blank" rel="noopener">${esc(p.link_kind)}</a>` : ""}</div></div><span class="chev">›</span></div>`;
+    const next = nx.length ? `<div class="next">Дальше: <b>${fDay(nx[0].start)}</b>, ${esc(projTrim(nx[0].title, p.name))}</div>`
+      : `<div class="next none">Следующая точка не назначена</div>`;
+    return `<div class="row tap" data-act="proj-open" data-p="${esc(p.name)}"><div class="grow"><div class="t"><b>${esc(p.name)}</b></div>
+      ${next}<div class="m">${bits.join(" · ")}</div></div><span class="chev">›</span></div>`;
   }).join("");
-  return `<section class="sec"><div class="sec-h"><span>Проекты · ${D.projects.length}</span>${ext(D.meta.sheet_url, "Таблица").replace("<a ", '<a class="act" ')}</div><div class="card">${rows}</div></section>`;
+  return `<section class="sec"><div class="sec-h"><span>Проекты · ${D.projects.length}</span><button class="act" data-act="pt-new" data-p="">+ Точка</button></div><div class="card">${rows}</div></section>`;
 }
 function renderHome() {
   return homeAttention() + homeOwner() + homeRibbon() + homeDecisions() + homeProjects() +
@@ -529,21 +534,23 @@ function renderTasks() {
 function renderCalendar() {
   const all = timeline("all");
   const kinds = [["all", "Все"], ["lab", "Лаба"], ["deadline", "Подача"], ["external", "Внешние"], ["task", "Задачи"]];
-  const pick = it => S.calKind === "all" || it.kind === S.calKind;
+  const pick = it => (S.calKind === "all" || it.kind === S.calKind) && (!S.calProject || it.project === S.calProject);
   const over = all.filter(it => it.kind === "task" && it.stop < today && pick(it));
   const upcoming = all.filter(it => it.stop >= today && pick(it));
   const groups = {};
   upcoming.forEach(it => { const k = `${it.start.getFullYear()}-${it.start.getMonth()}`; (groups[k] = groups[k] || []).push(it); });
-  const row = it => `<div class="row ${it.taskId || it.meet ? "tap" : ""}" ${it.taskId ? `data-act="task-open" data-id="${it.taskId}"` : it.meet ? 'data-act="meet-open"' : ""}>
+  const row = it => `<div class="row ${it.taskId || it.meet || it.point ? "tap" : ""}" ${it.taskId ? `data-act="task-open" data-id="${it.taskId}"` : it.meet ? 'data-act="meet-open"' : it.point ? `data-act="pt-open" data-id="${esc(it.pid)}"` : ""}>
     <div class="datecol">${it.end ? `<b class="rng">${it.start.getDate()}-${it.stop.getDate()}</b>` : `<b>${it.start.getDate()}</b>`}<small>${WD[it.start.getDay()]}</small></div>
     <div class="grow"><div class="t">${esc(it.title)}</div>${it.note ? `<div class="m">${esc(it.note)}</div>` : ""}
-    ${it.links || it.url ? `<div class="links">${it.links ? ext(it.links[0], "Источник в чате") : ""}${it.url ? ext(it.url, "Сайт") : ""}</div>` : ""}${evBlock(it)}</div>
+    ${it.links || it.url ? `<div class="links">${it.links ? ext(it.links[0], "Источник в чате") : ""}${it.url ? ext(it.url, "Сайт") : ""}</div>` : ""}${evBlock(it)}${projLine(it)}</div>
     <span class="pill ${KIND[it.kind][1]}">${KIND[it.kind][0]}</span>${S.owner && it.key && it.kind !== "task" ? delBtn("events", it.key) : ""}</div>`;
-  let html = `<div class="h1"><b>Календарь</b></div><p class="lead">Встречи и вехи Лабы, сроки подачи и внешние события. Отмечай, где участвуешь; по срокам подачи можно сразу завести задачу.</p>
+  let html = `<div class="h1"><b>Календарь</b><button class="btn mini" data-act="pt-new" data-p="${esc(S.calProject || "")}">+ Точка</button></div><p class="lead">Встречи и вехи Лабы, точки проектов, сроки подачи и внешние события. Отмечай, где участвуешь; по срокам подачи можно сразу завести задачу.</p>
     <div class="chips" role="group" aria-label="Тип">${kinds.map(([k, l]) => `<button class="chip" data-act="cal" data-k="${k}" aria-pressed="${S.calKind === k}">${l}</button>`).join("")}</div>`;
+  if (S.calProject) html += `<div class="chips" role="group" aria-label="Проект"><button class="chip" data-act="cal-proj" data-p="" aria-pressed="true">Проект «${esc(S.calProject)}» ✕</button></div>`;
   if (over.length) html += `<div class="grp red">Просроченные задачи <span class="num">${over.length}</span></div><div class="card">${over.map(row).join("")}</div>`;
   Object.keys(groups).forEach(k => { const [y, m] = k.split("-").map(Number); html += `<div class="grp">${MONN[m]} ${y}</div><div class="card">${groups[k].map(row).join("")}</div>`; });
-  if (S.calKind === "all" || S.calKind === "external") html += `<div class="grp">Без даты</div><div class="card">${(D.nodate || []).map(n => `<div class="row"><div class="grow"><div class="t">${esc(n.title)}</div><div class="m">${esc(n.note)}</div>
+  if (S.calProject && !over.length && !upcoming.length) html += `<div class="card" style="margin-top:12px"><div class="empty">У проекта «${esc(S.calProject)}» впереди пока нет точек.</div><div class="row tap" data-act="pt-new" data-p="${esc(S.calProject)}"><div class="grow"><div class="t"><b>+ Точка</b></div><div class="m">Что и к какому числу должно быть готово</div></div><span class="chev">›</span></div></div>`;
+  if (!S.calProject && (S.calKind === "all" || S.calKind === "external")) html += `<div class="grp">Без даты</div><div class="card">${(D.nodate || []).map(n => `<div class="row"><div class="grow"><div class="t">${esc(n.title)}</div><div class="m">${esc(n.note)}</div>
     <div class="links">${ext(n.links[0], "Источник в чате")}${n.url ? ext(n.url, "Сайт") : ""}</div></div>${S.owner && n.key ? delBtn("nodate", n.key) : ""}</div>`).join("")}</div>`;
   return html;
 }
@@ -662,7 +669,8 @@ async function remote(action, payload, okMsg, rollback, after) {
     rollback(); render(true);
     if (payload.taskId && $("sheet").classList.contains("on")) taskSheet(payload.taskId);
     haptic("error");
-    const why = { row_changed: "строку в таблице успели изменить, обнови портал", no_username: "нужен @username в настройках Telegram",
+    const why = (action.indexOf("point_") === 0 ? { not_author: "менять точку может только её автор или Антон",
+      bad_item: "точка уже изменилась, обнови портал", too_long: "слишком длинно, до 140 знаков" } : {})[e.message] || { row_changed: "строку в таблице успели изменить, обнови портал", no_username: "нужен @username в настройках Telegram",
       target_row_busy: "под задачами в таблице занята строка", not_member: "портал только для участников AI laba",
       not_assignee: "ты не исполнитель этой задачи", task_done: "задача уже закрыта",
       not_owner: "это может сделать только Антон", bad_card: "карточка уже изменилась, обнови портал",
@@ -673,6 +681,9 @@ async function remote(action, payload, okMsg, rollback, after) {
       bad_item: "повестка уже изменилась, обнови портал",
       agenda_broken: "на вкладке «Повестка» нужны столбцы id, Пункт и Статус",
       marks_full: "отметок слишком много, напиши Антону",
+      bad_project: "такого проекта нет в таблице", points_full: "у проекта уже 12 будущих точек",
+      point_closed: "эту точку уже убрали", links_full: "привязок слишком много, напиши Антону",
+      points_broken: "на вкладке «Точки» нужны столбцы id, Проект, Точка, Дата и Статус",
       unknown_action: "сервер портала ещё не обновлён" }[e.message] || e.message;
     toast("Не сохранилось: " + why);
   }
@@ -745,7 +756,7 @@ document.getElementById("app").addEventListener("click", e => {
   const a = el.dataset.act, id = el.dataset.id;
   if (a !== "tool-toggle" && a !== "task-open" && a !== "project" && a !== "day") e.stopPropagation();
   switch (a) {
-    case "tab": S.tab = el.dataset.tab; store.set("tab", S.tab); if (S.tab !== "tasks") S.project = null; render(); break;
+    case "tab": S.tab = el.dataset.tab; store.set("tab", S.tab); if (S.tab !== "tasks") S.project = null; S.calProject = null; render(); break;
     case "seg-go": S.tab = "tasks"; S.seg = el.dataset.seg; S.project = null; render(); break;
     case "seg": S.seg = el.dataset.seg; render(true); break;
     case "proj": S.project = el.dataset.p || null; render(true); break;
@@ -787,6 +798,59 @@ document.getElementById("app").addEventListener("click", e => {
     }
     case "card-del": if (S.owner) cardDelete(el.dataset.kind, el.dataset.key); break;
     case "undo-del": undoDelete(); break;
+    case "proj-open": closeSheet(); projSheet(el.dataset.p); break;
+    case "proj-cal": closeSheet(); S.tab = "calendar"; S.calProject = el.dataset.p || null; S.calKind = "all"; S.day = null; store.set("tab", S.tab); render(); break;
+    case "proj-tasks": closeSheet(); S.tab = "tasks"; S.seg = "all"; S.project = el.dataset.p || null; store.set("tab", S.tab); render(); break;
+    case "cal-proj": S.calProject = el.dataset.p || null; render(true); break;
+    case "pt-new": if (needViewer()) pointSheet({ project: el.dataset.p || (S.tab === "calendar" ? S.calProject || "" : "") }); break;
+    case "pt-due": { const f = $("ptDate"); if (f) f.value = el.dataset.d; break; }
+    case "pt-save": {
+      const project = ($("ptProject") || {}).value || "", date = ($("ptDate") || {}).value || "";
+      const title = (($("ptTitle") || {}).value || "").replace(/\s+/g, " ").trim(), draft = { project, title, date };
+      if (!project) { toast("Выбери проект"); break; }
+      if (title.length < 3) { toast("Напиши, что должно произойти"); $("ptTitle").focus(); break; }
+      if (!date) { toast("Выбери дату"); break; }
+      if (date < iso(today)) { toast("Эта дата уже прошла"); break; }
+      const tmp = { id: "tmp" + Date.now(), project, title, date, by: actorHandle(), at: iso(today), pending: true };
+      (D.points = D.points || []).push(tmp);
+      closeSheet(); render(true);
+      remote("point_add", { project, title, date }, `Точка «${title}» в календаре`,
+        () => { D.points = D.points.filter(x => x !== tmp); pointSheet(draft); },
+        r => { Object.assign(tmp, (r && r.item) || {}, { pending: false }); render(true); });
+      break;
+    }
+    case "pt-open": pointEdit(el.dataset.id); break;
+    case "pt-move": {
+      const x = ((D && D.points) || []).find(y => y.id === el.dataset.id); if (!x) break;
+      const d = ($("ptMove") || {}).value || "";
+      if (!d) { toast("Выбери дату"); break; }
+      if (d < iso(today)) { toast("Эта дата уже прошла"); break; }
+      closeSheet();
+      if (d === x.date) break;
+      const prev = x.date; x.date = d; render(true);
+      remote("point_move", { id: x.id, date: d }, `Точка перенесена на ${fLong(dOnly(d))}`, () => { x.date = prev; });
+      break;
+    }
+    case "pt-drop": {
+      const x = ((D && D.points) || []).find(y => y.id === el.dataset.id); if (!x) break;
+      confirmAsk(`Убрать точку «${x.title}»?`, () => {
+        const i = D.points.indexOf(x); if (i < 0) return;
+        D.points.splice(i, 1); closeSheet(); render(true);
+        remote("point_drop", { id: x.id }, "Точка убрана", () => { D.points.splice(Math.min(i, D.points.length), 0, x); });
+      });
+      break;
+    }
+    case "ev-proj": evProjSheet(el.dataset.k); break;
+    case "ev-proj-set": {
+      const ev = (D.events || []).find(x => x.key === el.dataset.k); if (!ev) break;
+      const v = el.dataset.p, auto = v === "*auto", prev = { project: ev.project, by: ev.project_by };
+      if (!auto) { ev.project = v || null; ev.project_by = "owner"; }
+      closeSheet(); render(true);
+      remote("event_project", auto ? { key: ev.key, auto: true } : { key: ev.key, project: v },
+        auto ? "Проект определится автоматически" : v ? `Событие теперь в проекте «${v}»` : "Событие отвязано от проекта",
+        () => { ev.project = prev.project; ev.project_by = prev.by; }, () => { if (auto) refresh(); });
+      break;
+    }
     case "due-open": if (needViewer()) dueSheet(id, "set"); break;
     case "due-pick": {
       const t = D.tasks.find(x => x.id === id); if (!t) break;
@@ -981,18 +1045,27 @@ function homeOwner() {
   const open = D.tasks.filter(t => !doneOf(t));
   const noDue = open.filter(t => !t.deadline), over = open.filter(t => bucket(t) === "overdue"), free = open.filter(t => !taskHandles(t).length);
   const idle = D.projects.filter(p => !open.some(t => t.project === p.name));
+  const noNext = D.projects.filter(p => !projNext(p.name).length);
   const st = D.stats, peak = st ? Math.max(1, ...st.days14) : 1;
   const line = (k, label, n, hint) => `<div class="row tap" data-act="hyg" data-k="${k}"><div class="grow"><div class="t">${label} <span class="pill ${!n ? "p-green" : k === "over" ? "p-red" : "p-amber"}">${n}</span></div><div class="m">${hint}</div></div><span class="chev">›</span></div>`;
   return `<section class="sec"><div class="sec-h"><span>Порядок в задачах</span><span style="text-transform:none;letter-spacing:0">видишь только ты</span></div><div class="card">
     ${line("nodue", "Без срока", noDue.length, noDue.length ? "Поставь срок: сейчас «Напоминатель» складывает их в общий список" : "У всех открытых задач есть срок")}
     ${line("over", "Просрочено", over.length, over.length ? "Перенеси срок или закрой задачу" : "Просрочек нет")}
     ${line("free", "Без исполнителя", free.length, free.length ? "Они ждут в «Нужны руки»" : "У каждой задачи есть исполнитель")}
+    ${line("nopt", "Проекты без следующей точки", noNext.length, noNext.length ? esc(noNext.map(p => p.name).join(", ")) : "У каждого проекта есть следующая точка")}
     ${idle.length ? `<div class="row"><div class="grow"><div class="t">Проекты без открытых задач <span class="pill p-mute">${idle.length}</span></div><div class="m">${esc(idle.map(p => p.name).join(", "))}</div></div></div>` : ""}
     ${st ? `<div class="row"><div class="grow"><div class="t">Портал открывали</div><div class="m">сегодня ${st.today}, за 7 дней ${st.week}, за 4 недели ${st.month} ${plural(st.month, ["человек", "человека", "человек"])}; тебя не считаю</div>
       <div class="spark" role="img" aria-label="Открытия по дням за две недели">${st.days14.map(n => `<i style="height:${Math.max(2, Math.round(26 * n / peak))}px"></i>`).join("")}</div></div></div>` : ""}
   </div></section>`;
 }
 function hygSheet(k) {
+  if (k === "nopt") {
+    const list = D.projects.filter(p => !projNext(p.name).length);
+    openSheet(`<h3>Проекты без следующей точки</h3>
+      <div class="card" style="background:var(--bg2)">${list.map(p => `<div class="row"><div class="grow"><div class="t"><b>${esc(p.name)}</b></div><div class="m">задач в работе: ${D.tasks.filter(t => t.project === p.name && !doneOf(t)).length}</div></div><button class="btn mini" data-act="pt-new" data-p="${esc(p.name)}">+ Точка</button></div>`).join("") || `<div class="empty">У каждого проекта есть следующая точка.</div>`}</div>
+      <p class="note">Точка: что и к какому числу должно быть готово. Она появится у проекта и в календаре у всех.</p>`);
+    return;
+  }
   const open = D.tasks.filter(t => !doneOf(t));
   const list = k === "nodue" ? open.filter(t => !t.deadline) : k === "over" ? open.filter(t => bucket(t) === "overdue") : open.filter(t => !taskHandles(t).length);
   openSheet(`<h3>${{ nodue: "Задачи без срока", over: "Просроченные задачи", free: "Задачи без исполнителя" }[k] || "Задачи"}</h3>
@@ -1065,6 +1138,78 @@ function evBlock(it) {
     : `<button class="btn mini" data-act="ev-go" data-k="${esc(it.key)}" aria-pressed="${mine}">${mine ? "Участвую ✓" : "Участвую"}</button>`;
   return `${lab.length ? `<div class="ev-who">От Лабы: ${esc(names(lab))}</div>` : ""}<div class="ev-act">${buttons}${taskLine}</div>`;
 }
+/* ---------- projects: next checkpoints, linked with the calendar ---------- */
+function pointItems() {
+  return ((D && D.points) || []).map(p => ({ kind: "lab", point: true, pid: p.id, title: p.title, project: p.project, by: p.by,
+    note: "точка проекта" + (p.by ? ", " + nm(p.by) : "") + (p.pending ? ", сохраняем…" : ""), start: dOnly(p.date), stop: dOnly(p.date) }));
+}
+const ribNote = it => (it.kind !== "task" && it.project ? [it.project, it.note].filter(Boolean).join(" · ") : (it.note || ""));
+function projNext(name) { return timeline("all").filter(it => it.project === name && !it.meet && it.stop >= today); }
+function projTrim(title, name) {
+  const t = String(title || ""), pre = String(name || "").toLowerCase() + ":";
+  return t.toLowerCase().startsWith(pre) ? t.slice(pre.length).trim() : t;
+}
+function projLine(it) {
+  if (it.kind === "task" || it.meet) return "";
+  const canLink = !!(S.owner && it.key && !it.point);
+  if (!it.project) return canLink ? `<div class="pj-line"><button class="act" data-act="ev-proj" data-k="${esc(it.key)}">+ Привязать к проекту</button></div>` : "";
+  return `<div class="pj-line"><button class="pj" data-act="proj-open" data-p="${esc(it.project)}">Проект «${esc(it.project)}» ›</button>${canLink ? `<button class="act" data-act="ev-proj" data-k="${esc(it.key)}">Изменить</button>` : ""}</div>`;
+}
+function projSheet(name) {
+  const p = D.projects.find(x => x.name === name); if (!p) return;
+  const items = projNext(name), ts = D.tasks.filter(t => t.project === name && !doneOf(t));
+  const over = ts.filter(t => bucket(t) === "overdue").length;
+  const who = id => { const t = D.tasks.find(x => x.id === id), hs = t ? taskHandles(t) : []; return hs.length ? names(hs) : "без исполнителя"; };
+  const cap = x => (x ? x.charAt(0).toUpperCase() + x.slice(1) : x);
+  const sub = it => it.kind === "task" ? "задача, " + who(it.taskId) : it.point ? "точка проекта" + (it.by ? ", " + nm(it.by) : "")
+    : [KIND[it.kind][0], it.note].filter(Boolean).join(" · ");
+  const row = it => `<div class="row ${it.taskId || it.point ? "tap" : ""}" ${it.taskId ? `data-act="task-open" data-id="${it.taskId}"` : it.point ? `data-act="pt-open" data-id="${esc(it.pid)}"` : ""}>
+    <div class="datecol"><b>${it.start.getDate()}</b><small>${MON[it.start.getMonth()]}</small></div>
+    <div class="grow"><div class="t">${esc(cap(projTrim(it.title, name)))}</div><div class="m">${esc(sub(it))}</div></div></div>`;
+  openSheet(`<h3>${esc(name)}</h3>
+    <p class="m" style="margin:-4px 0 12px">${ts.length} ${plural(ts.length, ["задача", "задачи", "задач"])} в работе${over ? `, ${over} ${plural(over, ["просрочена", "просрочены", "просрочено"])}` : ""}${p.topic ? `, в чате ${ago(p.last)}` : ""}</p>
+    <div class="grp">Следующие точки</div>
+    <div class="card" style="background:var(--bg2)">${items.slice(0, 6).map(row).join("") || `<div class="empty">Следующая точка не назначена. Добавь ближайшую: что и к какому числу должно быть готово.</div>`}
+      ${items.length > 6 ? `<div class="row tap" data-act="proj-cal" data-p="${esc(name)}"><div class="grow m">Ещё ${items.length - 6} в календаре</div><span class="chev">›</span></div>` : ""}</div>
+    <div class="stack" style="margin-top:12px">
+      <button class="btn primary wide" data-act="pt-new" data-p="${esc(name)}">+ Точка</button>
+      <button class="btn wide" data-act="proj-cal" data-p="${esc(name)}">Точки в календаре</button>
+      <button class="btn wide" data-act="proj-tasks" data-p="${esc(name)}">Задачи проекта · ${ts.length}</button></div>
+    ${p.topic_link || p.link ? `<div class="links" style="margin-top:12px">${p.topic_link ? ext(p.topic_link, `Топик «${p.topic_title || name}»`) : ""}${p.link ? ext(p.link, p.link_kind || "Материалы") : ""}</div>` : ""}
+    <p class="note">Точки проекта: вехи из чата (их собирает Hermes), сроки задач из таблицы и точки, добавленные в портале. Всё это видно и в календаре.</p>`);
+}
+let draftPoint = null;
+function pointSheet(pre) {
+  const p = Object.assign({ project: "", title: "", date: "" }, pre || {});
+  draftPoint = p;
+  openSheet(`<h3>Новая точка</h3>
+    <label class="fld"><span>Проект</span><select class="inp" id="ptProject">${p.project ? "" : `<option value="">Выбери проект</option>`}${D.projects.map(x => `<option ${x.name === p.project ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></label>
+    <label class="fld"><span>Что должно произойти</span><textarea class="inp" id="ptTitle" rows="2" maxlength="140" placeholder="Например: черновик доклада готов">${esc(p.title)}</textarea></label>
+    <div class="fld"><span>Когда</span><input class="inp" type="date" id="ptDate" value="${esc(p.date)}" min="${iso(today)}" max="${iso(addDays(today, 365))}">
+      <div class="chips in">${duePresets().map(o => `<button class="chip" data-act="pt-due" data-d="${o.iso}">${o.label}</button>`).join("")}</div></div>
+    <button class="btn primary wide" data-act="pt-save">Добавить в календарь</button>
+    <p class="note">Точка появится у проекта и в календаре у всех. Перенести или убрать её смогут автор и Антон. Хранится на вкладке «Точки» в таблице Лабы.</p>`);
+}
+function pointEdit(id) {
+  const x = ((D && D.points) || []).find(y => y.id === id); if (!x) return;
+  const me = S.me ? S.me.toLowerCase() : "", mine = !x.pending && (S.owner || (!!me && String(x.by).toLowerCase() === me));
+  openSheet(`<h3>${esc(x.title)}</h3>
+    <p class="m" style="margin:-4px 0 14px">Точка проекта «${esc(x.project)}», ${fLong(dOnly(x.date))}${x.by ? `, добавил(а) ${esc(nm(x.by))}` : ""}</p>
+    ${mine ? `<div class="fld"><span>Перенести на другую дату</span><input class="inp" type="date" id="ptMove" value="${esc(x.date)}" min="${iso(today)}" max="${iso(addDays(today, 365))}"></div>
+      <div class="stack"><button class="btn primary wide" data-act="pt-move" data-id="${esc(x.id)}">Сохранить дату</button>
+        <button class="btn wide danger" data-act="pt-drop" data-id="${esc(x.id)}">Убрать точку</button></div>` : ""}
+    <div class="stack" style="margin-top:10px"><button class="btn wide" data-act="proj-open" data-p="${esc(x.project)}">Открыть проект</button></div>`);
+}
+function evProjSheet(key) {
+  const ev = (D.events || []).find(x => x.key === key); if (!ev) return;
+  const how = { title: "Сейчас проект определён по названию события.", chat: "Сейчас проект указал Hermes по сообщениям чата.",
+    task: "Сейчас проект взят из задачи-заявки.", owner: "Проект выбран вручную." }[ev.project_by] || "Сейчас событие не привязано к проекту.";
+  openSheet(`<h3>Проект события</h3><p class="m" style="margin:-4px 0 14px">«${esc(ev.title)}», ${fLong(dOnly(ev.date))}</p>
+    <div class="stack">${D.projects.map(p => `<button class="btn wide" data-act="ev-proj-set" data-k="${esc(key)}" data-p="${esc(p.name)}">${esc(p.name)}${ev.project === p.name ? " ✓" : ""}</button>`).join("")}
+      <button class="btn wide" data-act="ev-proj-set" data-k="${esc(key)}" data-p="">Без проекта${ev.project_by === "owner" && !ev.project ? " ✓" : ""}</button>
+      ${ev.project_by === "owner" ? `<button class="btn wide" data-act="ev-proj-set" data-k="${esc(key)}" data-p="*auto">Определять автоматически</button>` : ""}</div>
+    <p class="note">${how} Выбор видят все.</p>`);
+}
 function boot(title, text, retry) {
   $("screen").innerHTML = `<div class="boot"><div><b>${esc(title)}</b>${esc(text || "")}${retry ? '<div style="margin-top:14px"><button class="btn" data-act="reload">Повторить</button></div>' : ""}</div></div>`;
 }
@@ -1112,6 +1257,10 @@ async function start() {
     if (params.get("due")) dueSheet(params.get("due"), "take");
     if (params.get("nt")) newTaskSheet({ assign: params.get("nt") });
     if (params.get("hyg")) hygSheet(params.get("hyg"));
+    if (params.get("calp")) { S.calProject = params.get("calp"); render(); }
+    if (params.get("proj")) projSheet(params.get("proj"));
+    if (params.get("pt")) { if (params.get("pt") === "new") pointSheet({ project: params.get("ptp") || "" }); else pointEdit(params.get("pt")); }
+    if (params.get("evp")) evProjSheet(params.get("evp"));
     /* deep links for review: ?seg=hands&day=2026-10-14&tool=2&scroll=600&sheet=r2&pick=1 */
     if (params.get("seg")) { S.seg = params.get("seg"); render(); }
     if (params.get("day")) { S.day = params.get("day"); render(); }
