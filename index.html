@@ -238,6 +238,10 @@ button.meet-t { cursor: pointer; background: none; border: 0; padding: 0; text-a
 .spark { display: flex; align-items: flex-end; gap: 3px; height: 26px; margin-top: 8px; }
 .spark i { flex: 1; min-height: 2px; border-radius: 2px; background: var(--accent); opacity: .7; }
 .draft { margin-top: 5px; font-size: 13px; color: var(--hint); }
+.ev-who { margin-top: 5px; font-size: 13px; line-height: 1.35; color: var(--ink); opacity: .86; }
+.ev-act { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.btn.mini[aria-pressed="true"] { background: var(--btn); color: var(--btn-ink); }
+.ev-task { background: none; border: 0; padding: 0; font: inherit; font-size: 13px; color: var(--accent); text-align: left; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -358,6 +362,7 @@ function timeline(viewer) {
     const d = dOnly(t.deadline);
     items.push({ kind: "task", title: t.title, note: `${t.project} · ${names(taskHandles(t)) || "без исполнителя"}`, start: d, stop: d, taskId: t.id });
   });
+  meetingsAhead(27).forEach(m => items.push(m));
   return items.sort((a, b) => a.start - b.start);
 }
 const KIND = { lab: ["Лаба", "p-accent", "k-lab"], deadline: ["Подача", "p-amber", "k-deadline"], external: ["Внешнее", "p-mute", "k-external"], task: ["Задача", "p-mute", "k-task"] };
@@ -446,7 +451,7 @@ function homeRibbon() {
     list = items.filter(it => it.start <= d && it.stop >= d);
   } else list = items.filter(it => it.stop >= today).slice(0, 5);
   const later = items.filter(it => it.start > end).length;
-  const rows = list.map(it => `<div class="row ${it.taskId ? "tap" : ""}" ${it.taskId ? `data-act="task-open" data-id="${it.taskId}"` : ""}>
+  const rows = list.map(it => `<div class="row ${it.taskId || it.meet ? "tap" : ""}" ${it.taskId ? `data-act="task-open" data-id="${it.taskId}"` : it.meet ? 'data-act="meet-open"' : ""}>
       <div class="datecol"><b>${it.start.getDate()}</b><small>${MON[it.start.getMonth()]}</small></div>
       <div class="grow"><div class="t">${esc(it.title)}</div><div class="m">${esc(it.note || "")}${it.end ? (it.note ? " · " : "") + "до " + fDay(it.stop) : ""}</div></div>
       <span class="pill ${KIND[it.kind][1]}">${KIND[it.kind][0]}</span></div>`).join("");
@@ -529,12 +534,12 @@ function renderCalendar() {
   const upcoming = all.filter(it => it.stop >= today && pick(it));
   const groups = {};
   upcoming.forEach(it => { const k = `${it.start.getFullYear()}-${it.start.getMonth()}`; (groups[k] = groups[k] || []).push(it); });
-  const row = it => `<div class="row ${it.taskId ? "tap" : ""}" ${it.taskId ? `data-act="task-open" data-id="${it.taskId}"` : ""}>
+  const row = it => `<div class="row ${it.taskId || it.meet ? "tap" : ""}" ${it.taskId ? `data-act="task-open" data-id="${it.taskId}"` : it.meet ? 'data-act="meet-open"' : ""}>
     <div class="datecol">${it.end ? `<b class="rng">${it.start.getDate()}-${it.stop.getDate()}</b>` : `<b>${it.start.getDate()}</b>`}<small>${WD[it.start.getDay()]}</small></div>
     <div class="grow"><div class="t">${esc(it.title)}</div>${it.note ? `<div class="m">${esc(it.note)}</div>` : ""}
-    ${it.links || it.url ? `<div class="links">${it.links ? ext(it.links[0], "Источник в чате") : ""}${it.url ? ext(it.url, "Сайт") : ""}</div>` : ""}</div>
+    ${it.links || it.url ? `<div class="links">${it.links ? ext(it.links[0], "Источник в чате") : ""}${it.url ? ext(it.url, "Сайт") : ""}</div>` : ""}${evBlock(it)}</div>
     <span class="pill ${KIND[it.kind][1]}">${KIND[it.kind][0]}</span>${S.owner && it.key && it.kind !== "task" ? delBtn("events", it.key) : ""}</div>`;
-  let html = `<div class="h1"><b>Календарь</b></div><p class="lead">Вехи Лабы, дедлайны подачи и внешние события. Задачи подтягиваются из таблицы.</p>
+  let html = `<div class="h1"><b>Календарь</b></div><p class="lead">Встречи и вехи Лабы, сроки подачи и внешние события. Отмечай, где участвуешь; по срокам подачи можно сразу завести задачу.</p>
     <div class="chips" role="group" aria-label="Тип">${kinds.map(([k, l]) => `<button class="chip" data-act="cal" data-k="${k}" aria-pressed="${S.calKind === k}">${l}</button>`).join("")}</div>`;
   if (over.length) html += `<div class="grp red">Просроченные задачи <span class="num">${over.length}</span></div><div class="card">${over.map(row).join("")}</div>`;
   Object.keys(groups).forEach(k => { const [y, m] = k.split("-").map(Number); html += `<div class="grp">${MONN[m]} ${y}</div><div class="card">${groups[k].map(row).join("")}</div>`; });
@@ -667,6 +672,7 @@ async function remote(action, payload, okMsg, rollback, after) {
       agenda_full: "у тебя уже 8 открытых тем в повестке", not_author: "убрать тему может только автор или Антон",
       bad_item: "повестка уже изменилась, обнови портал",
       agenda_broken: "на вкладке «Повестка» нужны столбцы id, Пункт и Статус",
+      marks_full: "отметок слишком много, напиши Антону",
       unknown_action: "сервер портала ещё не обновлён" }[e.message] || e.message;
     toast("Не сохранилось: " + why);
   }
@@ -801,9 +807,15 @@ document.getElementById("app").addEventListener("click", e => {
       const payload = { title, project: draft.project, assign: who === "me" || who === "free" ? who : [who] };
       if (due) payload.deadline = due;
       if (draft.decision) payload.decision = draft.decision;
+      if (draft.event) payload.event = draft.event;
       closeSheet(); toast("Сохраняем в таблицу…");
       remote("add_task", payload, who === "free" ? `«${title}» теперь в «Нужны руки»` : `Задача «${title}» в таблице`,
-        () => newTaskSheet(draft), r => { if (draft.decision) markMade(draft.decision, r, title); render(true); refresh(); });
+        () => newTaskSheet(draft), r => {
+          if (draft.decision) markMade(draft.decision, r, title);
+          const ev = draft.event && (D.events || []).find(x => x.key === draft.event);
+          if (ev) ev.task = { row: r && r.row, title };
+          render(true); refresh();
+        });
       break;
     }
     case "dec-task": {
@@ -814,6 +826,24 @@ document.getElementById("app").addEventListener("click", e => {
       break;
     }
     case "hyg": hygSheet(el.dataset.k); break;
+    case "ev-go": {
+      if (!needViewer()) break;
+      const ev = (D.events || []).find(x => x.key === el.dataset.k); if (!ev) break;
+      const me = actorHandle(), prev = (ev.going || []).slice();
+      const on = !prev.some(h => h.toLowerCase() === me.toLowerCase());
+      ev.going = on ? prev.concat(me) : prev.filter(h => h.toLowerCase() !== me.toLowerCase());
+      render(true);
+      remote("event_mark", { key: ev.key, on }, on ? `Отметили: участвуешь в «${ev.title}»` : "Отметка снята", () => { ev.going = prev; });
+      break;
+    }
+    case "ev-task": {
+      if (!needViewer()) break;
+      const ev = (D.events || []).find(x => x.key === el.dataset.k); if (!ev) break;
+      const proj = (D.projects.find(p => /продвиж/i.test(p.name)) || {}).name || "";
+      newTaskSheet({ title: `Заявка: ${ev.title}`.slice(0, 200), project: proj, assign: "me",
+        deadline: ev.date >= iso(today) ? ev.date : "", event: ev.key });
+      break;
+    }
     case "meet-open": if (S.tab !== "meet") S.prevTab = S.tab; S.tab = "meet"; closeSheet(); render(); break;
     case "ag-add": {
       if (!needViewer()) break;
@@ -924,7 +954,7 @@ function setDue(t, d) {
 }
 let draftTask = null;
 function newTaskSheet(pre) {
-  const p = Object.assign({ title: "", project: "", assign: "me", deadline: "", decision: "" }, pre || {});
+  const p = Object.assign({ title: "", project: "", assign: "me", deadline: "", decision: "", event: "" }, pre || {});
   if (S.me && String(p.assign).toLowerCase() === S.me.toLowerCase()) p.assign = "me";
   draftTask = p;
   const projOf = name => { const x = D.projects.find(y => y.name === name || y.raw === name); return x ? (x.raw || x.name) : name; };
@@ -933,7 +963,7 @@ function newTaskSheet(pre) {
   const who = [["me", "Беру сам(а)"], ["free", "Нужны руки: без исполнителя"]].concat(S.owner
     ? D.people.filter(x => x.handle.toLowerCase() !== mine).map(x => [x.handle, `${x.name} ${x.handle}`]) : []);
   if (S.owner && /^@/.test(p.assign) && !who.some(([v]) => v === p.assign)) who.push([p.assign, p.assign]);
-  openSheet(`<h3>${p.decision ? "Задача по итогам встречи" : "Новая задача"}</h3>
+  openSheet(`<h3>${p.decision ? "Задача по итогам встречи" : p.event ? "Заявка от Лабы" : "Новая задача"}</h3>
     <label class="fld"><span>Что сделать</span><textarea class="inp" id="ntTitle" rows="2" maxlength="200" placeholder="Например: собрать кейсы для доклада">${esc(p.title)}</textarea></label>
     <label class="fld"><span>Проект</span><select class="inp" id="ntProject"><option value="">Без проекта</option>${projs.map(x => `<option ${x === sel ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></label>
     <label class="fld"><span>Кто</span><select class="inp" id="ntWho">${who.map(([v, l]) => `<option value="${esc(v)}" ${v === p.assign ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
@@ -1003,6 +1033,37 @@ function renderMeet() {
 function goBack() {
   if ($("sheet").classList.contains("on")) { closeSheet(); return; }
   if (S.tab === "meet") { S.tab = S.prevTab || "home"; render(); }
+}
+
+/* ---------- calendar: meetings as events, who from the Lab takes part ---------- */
+function meetingsAhead(days) {
+  if (!D || !D.meeting) return [];
+  const m = meetDay(), n = openAgenda().length, out = [];
+  for (let d = m.date; diff(today, d) <= days; d = addDays(d, 7)) {
+    out.push({ kind: "lab", title: "Встреча Лабы", start: d, stop: d, meet: true,
+      note: [m.time, d === m.date && n ? `тем в повестке: ${n}` : "Телемост"].filter(Boolean).join(", ") });
+  }
+  return out;
+}
+const stems = s => new Set((String(s || "").toLowerCase().match(/[a-zа-яё]{5,}/g) || []).map(w => w.slice(0, 5)));
+/* roles from the chat (speakers, who prepares an application) belong to an event on the same dates with a shared word */
+function rolesFor(it) {
+  const st = stems(`${it.title} ${it.note || ""}`), from = iso(it.start), to = iso(it.stop);
+  return (D.roles || []).filter(r => r.date && r.date >= from && r.date <= to && [...stems(r.title)].some(w => st.has(w)));
+}
+function evBlock(it) {
+  if (!it.key || it.meet || it.kind === "task") return "";
+  const going = it.going || [], roles = rolesFor(it), me = S.me ? S.me.toLowerCase() : "";
+  const lab = [...new Set(roles.flatMap(r => r.handles).concat(going))];
+  const mine = !!me && going.some(h => h.toLowerCase() === me);
+  const tk = it.task ? (D.tasks.find(t => t.row === it.task.row && t.title === it.task.title) || D.tasks.find(t => t.title === it.task.title)) : null;
+  const taskLine = it.task ? (tk
+    ? `<button class="ev-task" data-act="task-open" data-id="${tk.id}">${doneOf(tk) ? "✓ Заявка подана" : `Заявку готовит: ${esc(taskHandles(tk).length ? names(taskHandles(tk)) : "нужны руки")}`}${tk.deadline && !doneOf(tk) ? ", до " + fDay(dOnly(tk.deadline)) : ""} ›</button>`
+    : `<span class="m">Заявка в таблице: «${esc(it.task.title)}»</span>`) : "";
+  const buttons = it.kind === "deadline"
+    ? (it.task ? "" : `<button class="btn mini" data-act="ev-task" data-k="${esc(it.key)}">Подаём от Лабы</button>`)
+    : `<button class="btn mini" data-act="ev-go" data-k="${esc(it.key)}" aria-pressed="${mine}">${mine ? "Участвую ✓" : "Участвую"}</button>`;
+  return `${lab.length ? `<div class="ev-who">От Лабы: ${esc(names(lab))}</div>` : ""}<div class="ev-act">${buttons}${taskLine}</div>`;
 }
 function boot(title, text, retry) {
   $("screen").innerHTML = `<div class="boot"><div><b>${esc(title)}</b>${esc(text || "")}${retry ? '<div style="margin-top:14px"><button class="btn" data-act="reload">Повторить</button></div>' : ""}</div></div>`;
