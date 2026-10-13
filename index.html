@@ -265,6 +265,8 @@ button.meet-t { cursor: pointer; background: none; border: 0; padding: 0; text-a
   background: var(--bg2); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
 button.lnk { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-align: left; }
 .card.nudge { box-shadow: inset 0 0 0 1px var(--accent); }
+.ava.pj { border-radius: 9px; }
+.h1 .act { flex: none; font-size: 15px; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; }
 </style>
 </head>
 <body>
@@ -505,8 +507,8 @@ function homeDecisions() {
       <div class="m" style="color:var(--ink);opacity:.86">${esc(x.text)}</div><div class="links">${ext(x.links[0], "В чате")}</div></div></div>`).join("")}
     </div></section>`;
 }
-function homeProjects() {
-  const rows = D.projects.map(p => {
+function projRows() {
+  return D.projects.map(p => {
     const ts = D.tasks.filter(t => t.project === p.name && !doneOf(t));
     const over = ts.filter(t => bucket(t) === "overdue").length, nx = projNext(p.name);
     const bits = [`${ts.length} ${plural(ts.length, ["задача", "задачи", "задач"])}`];
@@ -518,11 +520,33 @@ function homeProjects() {
     return `<div class="row tap" data-act="proj-open" data-p="${esc(p.name)}"><div class="grow"><div class="t"><b>${esc(p.name)}</b></div>
       ${next}<div class="m">${bits.join(" · ")}</div></div><span class="chev">›</span></div>`;
   }).join("");
-  return `<section class="sec"><div class="sec-h"><span>Проекты · ${D.projects.length}</span><button class="act" data-act="pt-new" data-p="">+ Точка</button></div><div class="card">${rows}</div></section>`;
+}
+function projBadge(name) {
+  let x = 7; for (const c of lc(name)) x = (x * 31 + c.charCodeAt(0)) % 100003;
+  return `<span class="ava pj" style="--h:${x % 360}" aria-hidden="true">${esc((name.trim()[0] || "?").toUpperCase())}</span>`;
+}
+/* home: one row like «Команда»; the full list lives on the «Проекты» screen */
+function homeProjects() {
+  if (!D.projects || !D.projects.length) return "";
+  const nx = D.projects.map(p => ({ p, next: projNext(p.name)[0] }));
+  const soon = nx.filter(x => x.next).sort((a, b) => a.next.start - b.next.start)[0];
+  const none = nx.filter(x => !x.next).length, all = D.projects.length;
+  const gap = none === all ? "Ни у одного проекта нет следующей точки"
+    : `У ${none} ${plural(none, ["проекта", "проектов", "проектов"])} нет следующей точки`;
+  return `<section class="sec"><div class="card"><div class="row tap" data-act="projects-open">
+    <div class="avas">${D.projects.slice(0, 4).map(p => projBadge(p.name)).join("")}</div>
+    <div class="grow"><div class="t"><b>Проекты</b> · ${all}</div>
+      ${soon ? `<div class="m">Дальше: <b>${fDay(soon.next.start)}</b>, <span style="white-space:nowrap">${esc(soon.p.name)}</span></div>` : ""}
+      ${none ? `<div class="m" style="color:var(--amber)">${gap}</div>` : ""}</div>
+    <span class="chev">›</span></div></div></section>`;
+}
+function renderProjects() {
+  const has = D.projects && D.projects.length;
+  return `<div class="h1"><b>Проекты</b><button class="act" data-act="pt-new" data-p="">+ Точка</button></div>
+    <div class="card" style="margin-top:12px">${has ? projRows() : '<div class="empty">Проектов пока нет.</div>'}</div>`;
 }
 function renderHome() {
-  return homeAttention() + homeOwner() + homeRibbon() + homeDecisions() + homeProjects() + homeTeam() +
-    `<p class="foot">Задачи и проекты берутся из «Таблицы задач и проектов Лабы» при каждом открытии. Решения, ивенты, инструменты и сводки обновляются из чата${D.meta.export_until ? ", последний раз " + fLong(dTime(D.meta.export_until)) : ""}. У каждой карточки есть ссылка на исходное сообщение.</p>`;
+  return homeAttention() + homeOwner() + homeRibbon() + homeDecisions() + homeProjects() + homeTeam();
 }
 
 /* ---------- tasks ---------- */
@@ -614,8 +638,7 @@ function renderTools() {
     <div class="chips" role="group" aria-label="Статус"><button class="chip" data-act="tool-status" data-s="all" aria-pressed="${S.toolStatus === "all"}">Все<span class="c">${tools.length}</span></button>
       ${STATUSES.map(s => `<button class="chip" data-act="tool-status" data-s="${s}" aria-pressed="${S.toolStatus === s}">${s}<span class="c">${tools.filter(t => t.status === s).length}</span></button>`).join("")}</div>
     <div class="card" style="margin-top:10px">${shown.map(card).join("") || `<div class="empty">Ничего не нашлось. Предложи инструмент, и он попадёт в кандидаты.</div>`}</div>
-    <div style="margin-top:12px"><button class="btn wide" data-act="suggest">Предложить инструмент</button></div>
-    <p class="foot">Карточки собраны из «Полезного», «Технологических новостей» и «Запросов на добровольцев». Статус «На тесте» связан с задачей в таблице.</p>`;
+    <div style="margin-top:12px"><button class="btn wide" data-act="suggest">Предложить инструмент</button></div>`;
 }
 
 /* ---------- news ---------- */
@@ -626,7 +649,7 @@ function renderNews() {
   if (!D.digests || !D.digests.length) return `<div class="h1"><b>Новости</b></div><div class="card" style="margin-top:12px"><div class="empty">Сводок пока нет. Они появятся после следующего обновления из чата.</div></div>`;
   const [last, ...prev] = D.digests;
   const n = dg => dg.cats.reduce((s, c) => s + c.items.length, 0);
-  return `<div class="h1"><b>Новости</b></div><p class="lead">Сводка бота «Сводка» по постам ${ext(D.meta.digest_source, "@monomento2")}: каждый вечер в 21:00, когда набралось от 10 постов.</p>
+  return `<div class="h1"><b>Новости</b></div>
     <div class="sec-h" style="margin-top:12px"><span>Последняя · ${fLong(dTime(last.date))}, ${last.date.slice(11, 16)}</span>${ext(last.link, "В чате").replace("<a ", '<a class="act" ')}</div>
     <div class="card" style="padding-bottom:6px">${digestBody(last)}</div>
     <div class="grp">Предыдущие</div>
@@ -635,7 +658,7 @@ function renderNews() {
 
 /* ---------- sheets ---------- */
 function openSheet(html) { $("sheet").innerHTML = `<div class="grab"></div>` + html; $("sheet").classList.add("on"); $("backdrop").classList.add("on"); if (tg) tg.BackButton.show(); }
-function closeSheet() { $("sheet").classList.remove("on"); $("backdrop").classList.remove("on"); if (tg) { if (S.tab === "meet" || S.tab === "team") tg.BackButton.show(); else tg.BackButton.hide(); } }
+function closeSheet() { $("sheet").classList.remove("on"); $("backdrop").classList.remove("on"); if (tg) { if (S.tab === "meet" || S.tab === "team" || S.tab === "projects") tg.BackButton.show(); else tg.BackButton.hide(); } }
 function viewerSheet() {
   const opts = [["all", "Вся Лаба", "общая картина"]].concat(D.people.map(p => {
     const n = myTasks(p.handle).length, r = myRoles(p.handle).length;
@@ -668,7 +691,7 @@ let toastTimer;
 function toast(msg) { const el = $("toast"); el.textContent = msg; el.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove("on"), 2600); }
 
 /* ---------- render + events ---------- */
-const SCREENS = { home: renderHome, tasks: renderTasks, calendar: renderCalendar, tools: renderTools, news: renderNews, meet: renderMeet, team: renderTeam };
+const SCREENS = { home: renderHome, tasks: renderTasks, calendar: renderCalendar, tools: renderTools, news: renderNews, meet: renderMeet, team: renderTeam, projects: renderProjects };
 function render(keepScroll) {
   if (!D) return;
   const sc = $("screen"), y = sc.scrollTop;
@@ -684,7 +707,7 @@ function render(keepScroll) {
   sc.scrollTop = keepScroll ? y : 0;
   const agBox = $("agText");
   if (agBox) agBox.addEventListener("input", e => { S.agDraft = e.target.value; });
-  if (tg) { if (S.tab === "meet" || S.tab === "team" || $("sheet").classList.contains("on")) tg.BackButton.show(); else tg.BackButton.hide(); }
+  if (tg) { if (S.tab === "meet" || S.tab === "team" || S.tab === "projects" || $("sheet").classList.contains("on")) tg.BackButton.show(); else tg.BackButton.hide(); }
   const s = $("toolSearch");
   if (s) s.addEventListener("input", e => { S.toolQuery = e.target.value; const pos = e.target.selectionStart; render(true); const n = $("toolSearch"); n.focus(); n.setSelectionRange(pos, pos); });
 }
@@ -833,7 +856,8 @@ document.getElementById("app").addEventListener("click", e => {
     }
     case "card-del": if (S.owner) cardDelete(el.dataset.kind, el.dataset.key); break;
     case "undo-del": undoDelete(); break;
-    case "team-open": if (S.tab !== "team" && S.tab !== "meet") S.prevTab = S.tab; S.tab = "team"; closeSheet(); render(); break;
+    case "projects-open": if (S.tab !== "team" && S.tab !== "meet" && S.tab !== "projects") S.prevTab = S.tab; S.tab = "projects"; closeSheet(); render(); break;
+    case "team-open": if (S.tab !== "team" && S.tab !== "meet" && S.tab !== "projects") S.prevTab = S.tab; S.tab = "team"; closeSheet(); render(); break;
     case "person-open": personSheet(el.dataset.h); break;
     case "team-edit": teamEditSheet(el.dataset.h || actorHandle()); break;
     case "team-save": {
@@ -1213,7 +1237,7 @@ if (tg) {
 }
 function goBack() {
   if ($("sheet").classList.contains("on")) { closeSheet(); return; }
-  if (S.tab === "meet" || S.tab === "team") { S.tab = TABS.includes(S.prevTab) ? S.prevTab : "home"; render(); }
+  if (S.tab === "meet" || S.tab === "team" || S.tab === "projects") { S.tab = TABS.includes(S.prevTab) ? S.prevTab : "home"; render(); }
 }
 
 /* ---------- calendar: meetings as events, who from the Lab takes part ---------- */
