@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>AI laba</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="telegram-web-app.js"></script>
+<script>window.Telegram || document.write('<script src="https://telegram.org/js/telegram-web-app.js"><\/script>');</script>
 <script src="config.js"></script>
 <style>
 /* Tokens follow Telegram Mini App theme params: inside Telegram the --tg-theme-* vars win,
@@ -738,7 +739,7 @@ async function remote(action, payload, okMsg, rollback, after) {
       bad_item: "повестка уже изменилась, обнови портал",
       agenda_broken: "на вкладке «Повестка» нужны столбцы id, Пункт и Статус",
       marks_full: "отметок слишком много, напиши Антону",
-      bad_handle: "ник указан неверно", team_broken: "на вкладке «Команда» нужны столбцы Ник, О себе, Ранее и Показывать",
+      bad_handle: "ник указан неверно", team_broken: "во вкладке «Команда» не нашлось колонки с @никами",
       not_in_team: "тебя нет в списке «Команды», напиши Антону",
       bad_project: "такого проекта нет в таблице", points_full: "у проекта уже 12 будущих точек",
       point_closed: "эту точку уже убрали", links_full: "привязок слишком много, напиши Антону",
@@ -1487,7 +1488,14 @@ async function start() {
     S.startTab = S.tab; S.startPrev = S.prevTab || null; S.startMine = sp === "tasks";
   }
   header(); tabs();
-  if (!tg && !window.LAB_MOCK) { boot("Откройте портал в Telegram", "Ссылка: t.me/newsinaibot/lab. Данные Лабы видны только участникам AI laba."); return; }
+  if (!tg && !window.LAB_MOCK) {
+    const W = window.Telegram && window.Telegram.WebApp, hash = /tgWebAppData=/.test(location.hash);
+    const inTg = hash || !!(W && W.platform && W.platform !== "unknown");
+    const code = `sdk ${W ? 1 : 0} · data ${hash ? 1 : 0} · ${(W && W.platform) || "-"} ${(W && W.version) || "-"}`;
+    if (inTg) boot("Telegram не передал данные входа", `Закрой окно и открой портал заново кнопкой «Открыть портал» в закрепе группы. Не помогло: обнови Telegram или открой портал с телефона и пришли Антону снимок этого экрана. Код: ${code}`);
+    else boot("Откройте портал в Telegram", "Ссылка: t.me/newsinaibot/lab. Данные Лабы видны только участникам AI laba.");
+    return;
+  }
   boot("Загружаем данные Лабы", "");
   try {
     const r = await api("load", null, () => boot("Загружаем данные Лабы", "Связь медленная, пробуем ещё раз."));
