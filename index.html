@@ -739,6 +739,7 @@ async function remote(action, payload, okMsg, rollback, after) {
       agenda_broken: "на вкладке «Повестка» нужны столбцы id, Пункт и Статус",
       marks_full: "отметок слишком много, напиши Антону",
       bad_handle: "ник указан неверно", team_broken: "на вкладке «Команда» нужны столбцы Ник, О себе, Ранее и Показывать",
+      not_in_team: "тебя нет в списке «Команды», напиши Антону",
       bad_project: "такого проекта нет в таблице", points_full: "у проекта уже 12 будущих точек",
       point_closed: "эту точку уже убрали", links_full: "привязок слишком много, напиши Антону",
       points_broken: "на вкладке «Точки» нужны столбцы id, Проект, Точка, Дата и Статус",
@@ -895,7 +896,7 @@ document.getElementById("app").addEventListener("click", e => {
     case "team-seed":
       if (!S.owner) break;
       remote("team_seed", {}, "Вкладка «Команда» обновлена", () => {},
-        r => { S.teamUrl = (r && r.url) || null; toast(r && r.added ? `Добавлено в таблицу: ${r.added}` : "Все уже есть в таблице"); refresh(); });
+        r => { S.teamUrl = (r && r.url) || null; toast(r && r.added ? `Добавлено в таблицу: ${r.added}` : "Ссылка на вкладку «Команда» ниже"); refresh(); });
       break;
     case "proj-open": closeSheet(); projSheet(el.dataset.p); break;
     case "proj-cal": closeSheet(); S.tab = "calendar"; S.calProject = el.dataset.p || null; S.calKind = "all"; S.day = null; render(); break;
@@ -1348,10 +1349,12 @@ function lc(h) { return String(h || "").toLowerCase(); }
 /* owner-only info shows in the owner's own view; «Смотреть как» another person shows what that person sees */
 function ownerView() { return !!S.owner && (S.viewer === "all" || lc(S.viewer) === lc(S.me)); }
 function personOf(h) { return ((D && D.people) || []).find(p => lc(p.handle) === lc(h)) || null; }
+/* in the owner's list (meta.team_manual) an opener without a row in «Команда» is a guest: not listed, no card to fill */
+function inTeam(h) { const p = personOf(h); return !!p && !(p.guest && D.meta && D.meta.team_manual); }
 function teamCard(h) { return ((D && D.team) || []).find(x => lc(x.handle) === lc(h)) || null; }
 function teamList() {
   const me = lc(actorHandle());
-  return ((D && D.people) || []).filter(p => !(teamCard(p.handle) || {}).hidden)
+  return ((D && D.people) || []).filter(p => !(teamCard(p.handle) || {}).hidden && inTeam(p.handle))
     .sort((a, b) => (lc(a.handle) === me ? -1 : lc(b.handle) === me ? 1 : String(nm(a.handle)).localeCompare(String(nm(b.handle)), "ru")));
 }
 function avatar(h, size) {
@@ -1370,7 +1373,7 @@ function personNow(h) {
 function homeTeam() {
   if (!D.people || !D.people.length) return "";
   const list = teamList(), me = actorHandle(), mine = me ? teamCard(me) : null;
-  const empty = !!(tg && me && !(mine && (mine.about || mine.hidden)));
+  const empty = !!(tg && me && inTeam(me) && !(mine && (mine.about || mine.hidden)));
   return `<section class="sec"><div class="card"><div class="row tap" data-act="team-open">
     <div class="avas">${list.slice(0, 4).map(p => avatar(p.handle)).join("")}</div>
     <div class="grow"><div class="t"><b>Команда</b> · ${list.length} ${plural(list.length, ["человек", "человека", "человек"])}</div>
@@ -1389,10 +1392,13 @@ function renderTeam() {
   const list = teamList(), me = actorHandle(), mine = me ? teamCard(me) : null;
   const filled = list.filter(p => (teamCard(p.handle) || {}).about).length;
   let nudge = "";
-  if (tg && me && mine && mine.hidden) nudge = `<div class="card nudge" style="margin-top:12px"><div class="row">${avatar(me)}<div class="grow"><div class="t"><b>Твоя карточка скрыта</b></div><div class="m">В «Команде» её не видят другие. Задачи и роли видны как обычно.</div></div><button class="btn mini" data-act="team-show">Показать</button></div></div>`;
-  else if (tg && me && !(mine && mine.about)) nudge = `<div class="card nudge" style="margin-top:12px"><div class="row tap" data-act="team-edit" data-h="${esc(me)}">${avatar(me)}<div class="grow"><div class="t"><b>Расскажи о себе</b></div><div class="m">Две-три строки: чем занимаешься и о чём тебя можно спросить</div></div><span class="chev">›</span></div></div>`;
+  if (tg && me && inTeam(me) && mine && mine.hidden) nudge = `<div class="card nudge" style="margin-top:12px"><div class="row">${avatar(me)}<div class="grow"><div class="t"><b>Твоя карточка скрыта</b></div><div class="m">В «Команде» её не видят другие. Задачи и роли видны как обычно.</div></div><button class="btn mini" data-act="team-show">Показать</button></div></div>`;
+  else if (tg && me && inTeam(me) && !(mine && mine.about)) nudge = `<div class="card nudge" style="margin-top:12px"><div class="row tap" data-act="team-edit" data-h="${esc(me)}">${avatar(me)}<div class="grow"><div class="t"><b>Расскажи о себе</b></div><div class="m">Две-три строки: чем занимаешься и о чём тебя можно спросить</div></div><span class="chev">›</span></div></div>`;
+  const manual = !!(D.meta && D.meta.team_manual);
   const owner = ownerView() ? `<section class="sec"><div class="sec-h"><span>Для Антона</span><span style="text-transform:none;letter-spacing:0">видишь только ты</span></div><div class="card">
-      <div class="row tap" data-act="team-seed"><div class="grow"><div class="t"><b>Заполнить вкладку «Команда»</b></div><div class="m">Добавит в таблицу всех, кого знает портал, с именами, чтобы писать описания прямо там. Описание есть у ${filled} из ${list.length}.</div></div><span class="chev">›</span></div>
+      <div class="row tap" data-act="team-seed"><div class="grow"><div class="t"><b>${manual ? "Список ведёшь ты во вкладке «Команда»" : "Заполнить вкладку «Команда»"}</b></div><div class="m">${manual
+        ? "Новая строка с ником добавляет человека в портал, удалённая строка убирает его. Имя пиши в колонке «Имя»."
+        : "Добавит в таблицу всех, кого знает портал. Дальше список ведёшь ты: новая строка с ником добавляет человека, удалённая строка убирает его."} Описание есть у ${filled} из ${list.length}.</div></div><span class="chev">›</span></div>
       ${S.teamUrl ? `<div class="row"><div class="grow m">${ext(S.teamUrl, "Открыть вкладку «Команда»")}</div></div>` : ""}</div></section>` : "";
   return `<div class="h1"><b>Команда</b></div>
     <p class="lead">Кто есть кто в Лабе. «О себе» и «Ранее» пишет сам человек, «Сейчас» портал собирает из задач, ролей и отметок «Участвую».</p>
@@ -1403,7 +1409,7 @@ function renderTeam() {
 function personSheet(h) {
   const p = personOf(h), c = teamCard(h) || {}, handle = p ? p.handle : (c.handle || h);
   if (!handle) return;
-  const self = !!tg && lc(handle) === lc(actorHandle()), canEdit = self || S.owner, now = personNow(handle);
+  const self = !!tg && lc(handle) === lc(actorHandle()), canEdit = (self && inTeam(handle)) || S.owner, now = personNow(handle);
   const hist = ((D && D.history) || {})[lc(handle)] || [], nick = String(handle).replace(/^@/, "");
   const rows = now.tasks.map(t => `<div class="row tap" data-act="task-open" data-id="${t.id}"><div class="grow"><div class="t">${esc(t.title)}</div><div class="m">${esc(t.project || "без проекта")}${!t.deadline ? "" : bucket(t) === "overdue" ? `, <span style="color:var(--red)">срок был ${fDay(dOnly(t.deadline))}</span>` : ", до " + fDay(dOnly(t.deadline))}</div></div><span class="chev">›</span></div>`)
     .concat(now.roles.map(r => `<div class="row"><div class="grow"><div class="t">${esc(r.title)}</div><div class="m">роль${r.date ? ", " + fDay(dOnly(r.date)) : ""}</div></div></div>`))
@@ -1414,6 +1420,7 @@ function personSheet(h) {
     ${!c.past && !hist.length ? `<div class="txt"><span class="m">Пока пусто.</span></div>` : ""}`;
   openSheet(`<div class="person-h">${avatar(handle, "lg")}<div class="grow"><h3>${esc(nm(handle))}</h3><div class="m">${esc(handle)}</div></div></div>
     ${c.hidden ? `<p class="note" style="margin:0 0 10px">${self ? "Твоя карточка скрыта: в «Команде» её не видят другие." : "Человек скрыл карточку: видны только задачи и роли."}</p>` : ""}
+    ${self && !inTeam(handle) ? `<p class="note" style="margin:0 0 10px">Тебя пока нет в списке «Команды». Напиши Антону, он добавит.</p>` : ""}
     ${!self ? `<a class="btn wide" href="https://t.me/${esc(nick)}" target="_blank" rel="noopener" style="display:grid;place-items:center;text-decoration:none">Написать в Telegram</a>` : ""}
     ${c.hidden ? "" : `<div class="grp">О себе</div><div class="txt">${c.about ? esc(c.about) : `<span class="m">Пока не написано.</span>`}</div>`}
     <div class="grp">Сейчас</div>
@@ -1454,9 +1461,9 @@ function boot(title, text, retry) {
 function applyData(data, user) {
   D = data;
   if (user && user.username && !D.people.some(p => p.handle.toLowerCase() === "@" + user.username.toLowerCase())) {
-    D.people.push({ handle: "@" + user.username, name: user.first_name || "@" + user.username });
+    D.people.push({ handle: "@" + user.username, name: (D.names || {})["@" + user.username] || user.first_name || "@" + user.username, guest: true });
   }
-  PEOPLE = Object.fromEntries(D.people.map(p => [p.handle, p.name]));
+  PEOPLE = Object.assign({}, D.names || {}, Object.fromEntries(D.people.map(p => [p.handle, p.name])));
   const me = user && user.username ? D.people.find(p => p.handle.toLowerCase() === "@" + user.username.toLowerCase()) : null;
   S.me = me ? me.handle : null;
   S.owner = !!(user && user.owner);
