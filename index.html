@@ -270,6 +270,12 @@ button.lnk { border: 0; background: none; padding: 0; font: inherit; color: var(
 .h1 .act { flex: none; font-size: 15px; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; }
 /* files */
 .file-link { display: inline-block; margin-right: 14px; }
+.tcom { margin-top: 10px; border-top: 1px solid var(--border, #d9dce2); padding-top: 10px; display: grid; gap: 8px; }
+.tcom-r { font-size: 13.5px; line-height: 1.4; }
+.tcom-r b { font-size: 13px; }
+.tcom-r .m { margin-left: 6px; font-size: 12px; }
+.tcom-add { display: flex; gap: 8px; margin-top: 10px; }
+.tcom-add input { flex: 1; min-width: 0; }
 .mcal { margin-top: 12px; padding: 10px 10px 8px; border-radius: 14px; background: var(--bg2, #f4f4f6); }
 .mcal-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .mcal-l { min-width: 0; flex: 1; margin: 0 6px; padding: 4px 10px; border: 0; border-radius: 10px; background: none; font: 600 13.5px/1.3 inherit; font-family: inherit; color: var(--ink, #14202a); cursor: pointer; }
@@ -689,15 +695,24 @@ function renderCalendar() {
 }
 
 /* ---------- tools ---------- */
-const STATUSES = ["Используем", "Пробовали", "На тесте", "Ищем тестера", "Кандидат"];
-const ST_CLS = { "Используем": "p-green", "Пробовали": "p-accent", "На тесте": "p-amber", "Ищем тестера": "p-red", "Кандидат": "p-mute" };
+const STATUSES = ["Используется", "Можно потестировать"]; // two statuses, the catalog ones map in toolView
+const ST_CLS = { "Используется": "p-green", "Можно потестировать": "p-amber" };
+const TOOL_ST_MAP = { "Используем": "Используется", "Кандидат": "Можно потестировать", "Ищем тестера": "Можно потестировать", "На тесте": "Можно потестировать", "Пробовали": "Можно потестировать", "Используется": "Используется", "Можно потестировать": "Можно потестировать" };
+/* ---------- tools: member comments ----------
+   short notes under an expanded tool card; author and time saved with the comment */
+function toolComments(t, i) {
+  const list = (t.comments || []).map(c => `<div class="tcom-r"><b>${esc(c.name)}</b><span class="m">${esc(String(c.at || "").slice(8, 10))}.${esc(String(c.at || "").slice(5, 7))}${c.at && c.at[10] ? `, ${esc(String(c.at).slice(11, 16))}` : ""}</span><div>${esc(c.text)}</div></div>`);
+  const form = t.key ? `<div class="tcom-add"><input class="inp" id="tcIn" maxlength="300" placeholder="Короткий комментарий"><button class="btn mini" data-act="tool-comment" data-i="${i}">Отправить</button></div>` : "";
+  return (list.length || t.key) ? `<div class="tcom">${list.join("")}${form}</div>` : "";
+}
 function toolView(t, i) {
   let mv = S.toolMoves[i];
   if (!mv && t.status !== "На тесте") {
     const k = D.tasks.find(x => x.title === `${t.name}, тест` && !doneOf(x));
     if (k) mv = k.handles.length ? nm(k.handles[0]) : k.who;
   }
-  return mv ? { ...t, status: "На тесте", who: mv } : t;
+  const out = mv ? { ...t, status: "На тесте", who: mv } : t;
+  return { ...out, status: TOOL_ST_MAP[out.status] || out.status };
 }
 function renderTools() {
   const tools = D.tools.map(toolView);
@@ -706,17 +721,16 @@ function renderTools() {
     (!q || (t.name + " " + t.cat + " " + t.what).toLowerCase().includes(q)));
   shown.sort((a, b) => STATUSES.indexOf(a[0].status) - STATUSES.indexOf(b[0].status));
   const card = ([t, i]) => {
-    const canTake = t.status === "Кандидат" || t.status === "Ищем тестера";
+    const canTake = t.status === "Можно потестировать";
     return `<div class="row tool tap ${S.openTool === i ? "open" : ""}" data-act="tool-toggle" data-i="${i}">
       <div class="grow"><div class="t"><b>${esc(t.name)}</b> <span class="m" style="display:inline">${esc(t.cat)}</span></div>
       <div class="what">${esc(t.what)}</div>${t.verdict ? `<div class="verdict"><span>Отзыв.</span> ${esc(t.verdict)}</div>` : ""}
       <div class="m">${[t.who ? esc(t.who) : "", t.date ? fDay(dOnly(t.date)) : ""].filter(Boolean).join(" · ")}${t.task ? " · задача в таблице" : ""}</div>
       <div class="links extra">${ext(t.links[0], "Источник в чате")}${t.links[1] ? ext(t.links[1], "Обсуждение") : ""}</div>
-      ${canTake || (S.owner && t.key && S.openTool === i) ? `<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">${canTake ? `<button class="btn" data-act="tool-take" data-i="${i}">Беру на тест</button>` : ""}${S.owner && t.key && S.openTool === i ? `<button class="btn danger" data-act="card-del" data-kind="tools" data-key="${esc(t.key)}">Удалить</button>` : ""}</div>` : ""}</div>
+      ${S.openTool === i ? toolComments(t, i) : ""}${canTake || (S.owner && t.key && S.openTool === i) ? `<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">${canTake ? `<button class="btn" data-act="tool-take" data-i="${i}">Беру на тест</button>` : ""}${S.owner && t.key && S.openTool === i ? `<button class="btn danger" data-act="card-del" data-kind="tools" data-key="${esc(t.key)}">Удалить</button>` : ""}</div>` : ""}</div>
       <span class="pill ${ST_CLS[t.status]}">${esc(t.status)}</span></div>`;
   };
   return `<div class="h1"><b>Инструменты</b></div>
-    <p class="pipeline">Путь инструмента: кандидат → ищем тестера → на тесте → пробовали → используем</p>
     <input class="search" id="toolSearch" type="search" placeholder="Найти инструмент или задачу" value="${esc(S.toolQuery)}" aria-label="Поиск инструментов">
     <div class="chips" role="group" aria-label="Статус"><button class="chip" data-act="tool-status" data-s="all" aria-pressed="${S.toolStatus === "all"}">Все<span class="c">${tools.length}</span></button>
       ${STATUSES.map(s => `<button class="chip" data-act="tool-status" data-s="${s}" aria-pressed="${S.toolStatus === s}">${s}<span class="c">${tools.filter(t => t.status === s).length}</span></button>`).join("")}</div>
@@ -1387,6 +1401,23 @@ case "cal-day": {
     }
     case "tool-toggle": S.openTool = S.openTool === Number(el.dataset.i) ? null : Number(el.dataset.i); render(true); break;
     case "tool-status": S.toolStatus = el.dataset.s; S.openTool = null; render(true); break;
+case "tool-comment": {
+      const ti = Number(el.dataset.i), tool = D.tools[Number(ti)];
+      if (!tool || !tool.key || !needViewer()) break;
+      const inp = $("tcIn");
+      const text = ((inp && inp.value) || "").replace(/\s+/g, " ").trim();
+      if (!text) { if (inp) inp.focus(); break; }
+      const who = nm(S.me || "") || S.me || "";
+      const at = iso(new Date()) + "T" + String(new Date().getHours()).padStart(2, "0") + ":" + String(new Date().getMinutes()).padStart(2, "0");
+      const prevC = tool.comments || [];
+      tool.comments = prevC.concat([{ name: who, text, at }]);
+      if (inp) inp.value = "";
+      render(true);
+      remote("tool_comment", { key: tool.key, text }, "Комментарий сохранён",
+        () => { tool.comments = prevC; },
+        r => { if (r && r.comments) { tool.comments = r.comments; render(true); } });
+      break;
+    }
     case "tool-take": {
       if (!needViewer()) break;
       const i = el.dataset.i, tool = D.tools[Number(i)];
