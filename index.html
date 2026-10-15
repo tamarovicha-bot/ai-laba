@@ -435,7 +435,7 @@ const KIND = { lab: ["Лаба", "p-accent", "k-lab"], deadline: ["Подача"
 /* ---------- rendering: shared bits ---------- */
 const $ = id => document.getElementById(id);
 function header() {
-  $("sub").textContent = D && D.meta && D.meta.export_until ? `задачи сейчас · чат на ${fLong(dTime(D.meta.export_until))}` : "портал Лабы";
+  $("sub").textContent = "";
   const meet = D && D.meeting, mt = $("meet");
   mt.hidden = !D || S.tab === "meet";
   const nAg = mt.hidden ? 0 : openAgenda().length;
@@ -788,16 +788,26 @@ function nodateSheet(n) {
 function digestItems(dg) {
   return dg.cats.reduce((s, c) => s.concat(c.items), []);
 }
-function digestBody(dg) {
-  return digestItems(dg).map(it => `<a class="news-item" href="${esc(it.u)}" target="_blank" rel="noopener">${esc(it.t)}</a>`).join("");
+function feedDays(list) {
+  const byDay = new Map();
+  (list || []).forEach(dg => {
+    const day = String(dg.date).slice(0, 10);
+    if (!byDay.has(day)) byDay.set(day, { date: dg.date, cats: {} });
+    const acc = byDay.get(day);
+    (dg.cats || []).forEach(c => {
+      const a = acc.cats[c.name] || (acc.cats[c.name] = { name: c.name, items: [] });
+      a.items.push(...c.items);
+    });
+  });
+  return Array.from(byDay.values()).map(d => ({ date: d.date, cats: Object.values(d.cats) }));
 }
 function newsFeedHtml(list) {
   const parts = [];
-  (list || []).forEach((dg, i) => {
-    const its = digestItems(dg);
+  feedDays(list).forEach((day, i) => {
+    const its = day.cats.reduce((s, c) => s.concat(c.items), []);
     if (!its.length) return;
-    parts.push(`<div class="feed-date"${i ? "" : ' style="border-top:0;margin-top:6px;padding-top:0"'}>${esc(fLong(dTime(dg.date)))}, ${esc(dg.date.slice(11, 16))}</div>`);
-    parts.push(its.map(it => `<a class="news-item" href="${esc(it.u)}" target="_blank" rel="noopener">${esc(it.t)}</a>`).join(""));
+    parts.push(`<div class="feed-date"${i ? "" : ' style="border-top:0;margin-top:6px;padding-top:0"'}>${esc(fLong(dTime(day.date)))} · ${its.length} ${plural(its.length, ["новость", "новости", "новостей"])}</div>`);
+    parts.push(day.cats.map(c => `<div class="cat">${esc(c.name)}</div>${c.items.map(it => `<a class="news-item" href="${esc(it.u)}" target="_blank" rel="noopener">${esc(it.t)}</a>`).join("")}`).join(""));
   });
   return parts.join("");
 }
@@ -842,8 +852,9 @@ function taskSheet(id) {
       ${S.owner && !isDone ? `<button class="btn wide" data-act="task-edit" data-id="${t.id}">Изменить</button>
       <button class="btn wide${pausedOf(t) ? " primary" : ""}" data-act="${pausedOf(t) ? "task-resume" : "task-pause"}" data-id="${t.id}">${pausedOf(t) ? "Возобновить" : "На паузу"}</button>` : ""}
       ${S.owner && !isDone && !pausedOf(t) ? `<button class="btn wide" data-act="due-open" data-id="${t.id}">${t.deadline ? "Перенести срок" : "Поставить срок"}</button>` : ""}
+      ${(S.owner || mine) && !isDone ? `<button class="btn wide" data-act="task-status" data-id="${t.id}">Изменить статус</button>` : ""}
       ${mine && !isDone ? `<button class="btn wide" data-act="task-release" data-id="${t.id}">Вернуть в «Нужны руки»</button>` : ""}
-      ${p && p.topic_link ? `<a class="btn wide" style="display:grid;place-items:center;text-decoration:none" href="${esc(p.topic_link)}" target="_blank" rel="noopener">Обсуждение в топике «${esc(p.topic_title)}»</a>` : ""}</div>
+      </div>
     <p class="note">${tg && S.me && S.viewer !== "all" && S.viewer.toLowerCase() !== S.me.toLowerCase() ? `Ты смотришь как ${esc(nm(S.viewer))}, но кнопки работают от твоего имени. ` : ""}«Беру», «Готово», сроки и возврат в «Нужны руки» сразу записываются в таблицу задач, «Напоминатель» это учтёт.</p>`);
 }
 
@@ -1091,6 +1102,8 @@ case "nd-edit": {
       if (t.deadline) takeTask(t, ""); else dueSheet(id, "take"); // no deadline yet: «Когда сделаешь?» first
       break;
     }
+    case "task-status": if ((S.owner || mineTask(id)) && needViewer()) statusEditSheet(id); break;
+    case "status-save": statusSave(id); break;
     case "task-edit": if (S.owner && needViewer()) taskEditSheet(id); break;
     case "te-due": { const f = $("teDue"); if (f) f.value = el.dataset.d; break; }
     case "te-who": {
@@ -1507,6 +1520,34 @@ function setDue(t, d) {
   render(true);
   remote("set_deadline", { row: t.row, title: t.title, deadline: d, taskId: t.id }, d ? `Новый срок: ${fLong(dOnly(d))}` : "Срок убран",
     () => { t.deadline = prev.deadline; t.deadline_raw = prev.raw; });
+}
+function mineTask(id) {
+  const t = D.tasks.find(x => x.id === id); if (!t) return false;
+  const hs = taskHandles(t), actor = tg ? S.me : (S.viewer !== "all" ? S.viewer : null);
+  return !!actor && hs.some(h => h.toLowerCase() === actor.toLowerCase());
+}
+function statusEditSheet(id) {
+  const t = D.tasks.find(x => x.id === id); if (!t) return;
+  openSheet(`<h3>${esc(t.title)}</h3><dl class="kv"><dt>Статус сейчас</dt><dd>${esc(t.status || "без статуса")}</dd></dl>
+  <label class="fld"><span>Новый статус</span><input class="inp" id="stIn" maxlength="60" placeholder="например: жду материалы" value="${esc(t.status || "")}"></label>
+  <div class="stack"><button class="btn primary wide" data-act="status-save" data-id="${t.id}">Сохранить</button></div>
+  <p class="note">Статус пишется в таблицу, в заметке остаётся кто и что поменял.</p>`);
+  const inp = $("stIn"); if (inp) {
+    inp.focus();
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") { const b = document.querySelector('[data-act="status-save"]'); if (b) b.click(); } });
+  }
+}
+function statusSave(id) {
+  const t = D.tasks.find(x => x.id === id); if (!t) return;
+  const inp = $("stIn"), prev = t.status || "";
+  const v = inp ? inp.value.replace(/\s+/g, " ").trim() : "";
+  if (!v) { toast("Напиши статус, например: жду материалы"); return; }
+  if (v.length > 60) { toast("Не длиннее 60 символов"); return; }
+  t.status = v;
+  render(true);
+  taskSheet(id);
+  remote("set_status", { row: t.row, title: t.title, taskId: t.id, status: v }, `Статус: ${v}`,
+    () => { t.status = prev; render(true); if ($("sheet").classList.contains("on")) taskSheet(id); });
 }
 let draftTask = null;
 function newTaskSheet(pre) {
