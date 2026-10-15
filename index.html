@@ -644,7 +644,7 @@ function renderCalendar() {
   Object.keys(groups).forEach(k => { const [y, m] = k.split("-").map(Number); html += `<div class="grp">${MONN[m]} ${y}</div><div class="card">${groups[k].map(row).join("")}</div>`; });
   if (S.calProject && !over.length && !upcoming.length) html += `<div class="card" style="margin-top:12px"><div class="empty">У проекта «${esc(S.calProject)}» впереди пока нет точек.</div><div class="row tap" data-act="pt-new" data-p="${esc(S.calProject)}"><div class="grow"><div class="t"><b>+ Точка</b></div><div class="m">Что и к какому числу должно быть готово</div></div><span class="chev">›</span></div></div>`;
   if (!S.calProject && (S.calKind === "all" || S.calKind === "external")) html += `<div class="grp">Без даты</div><div class="card">${(D.nodate || []).map(n => `<div class="row"><div class="grow"><div class="t">${esc(n.title)}</div><div class="m">${esc(n.note)}</div>
-    <div class="links">${ext(n.links[0], "Источник в чате")}${n.url ? ext(n.url, "Сайт") : ""}</div></div>${S.owner && n.key ? delBtn("nodate", n.key) : ""}</div>`).join("")}</div>`;
+    <div class="links">${ext(n.links[0], "Источник в чате")}${n.url ? ext(n.url, "Сайт") : ""}</div></div>${S.owner && n.key ? nodateBtns(n) : ""}</div>`).join("")}</div>`;
   return html;
 }
 
@@ -685,19 +685,60 @@ function renderTools() {
 }
 
 /* ---------- news ---------- */
+function newsCards(dg) {
+  return dg.cats.reduce((s, c) => s + c.items.length, 0);
+}
+function newsMatch(dg) {
+  const q = (S.nq || "").trim().toLowerCase();
+  if (!q) return true;
+  const words = q.split(/\s+/).filter(Boolean);
+  return dg.cats.some(c => c.items.some(it => words.every(w => (it.t || "").toLowerCase().includes(w))));
+}
+function newsFilterCard(dg) {
+  const visible = newsMatch(dg);
+  return `<div class="card" style="padding-bottom:6px">${visible ? digestBody(dg) : ""}</div>`;
+}
+function newsDigestsFilter(prev) {
+  if (!(S.nq || "").trim()) return prev;
+  return prev.filter(newsMatch);
+}
+function newsSearchInput() {
+  return `<input class="search" id="newsSearch" type="search" placeholder="Поиск по новостям" value="${esc(S.nq || "")}" aria-label="Поиск по новостям">`;
+}
+function newsSearchCounter() {
+  const qs = (S.nq || "").trim();
+  if (!qs) return "";
+  const all = [D.digests[0]].concat(D.digests.slice(1)).filter(newsMatch);
+  const total = all.reduce((s, dg) => s + newsCards(dg), 0);
+  if (!all.length) return `<div class="grp">Ничего не нашлось: «${esc(qs)}»</div>`;
+  return `<div class="grp">Нашлось ${total} ${plural(total, ["новость", "новости", "новостей"])} в ${all.length} ${plural(all.length, ["сводке", "сводках", "сводках"])}</div>`;
+}
+/* ---------- «Без даты»: редактирование ---------- */
+function nodateBtns(n) {
+  return `<button class="act" data-act="nd-edit" data-id="${esc(n.key)}">Изменить</button>` + delBtn("nodate", n.key);
+}
+function nodateSheet(n) {
+  openSheet(`<h3>Событие без даты</h3>
+    <label class="fld"><span>Название</span><input class="inp" id="ndTitle" maxlength="160" value="${esc(n.title)}"></label>
+    <label class="fld"><span>Заметка</span><input class="inp" id="ndNote" maxlength="300" placeholder="не обязательно" value="${esc(n.note || "")}"></label>
+    <label class="fld"><span>Ссылка</span><input class="inp" id="ndUrl" maxlength="500" placeholder="https://..." value="${esc(n.url || "")}"></label>
+    <button class="btn primary wide" data-act="nd-save" data-id="${esc(n.key)}">Сохранить</button>
+    <p class="note">Правку видит вся Лаба. Источник в чате остаётся прежним: ссылка ведёт на исходное сообщение.</p>`);
+}
 function digestBody(dg) {
   return dg.cats.map(c => `<div class="cat">${esc(c.name)}</div>${c.items.map(it => `<a class="news-item" href="${esc(it.u)}" target="_blank" rel="noopener">${esc(it.t)}</a>`).join("")}`).join("");
 }
 function renderNews() {
   if (!D.digests || !D.digests.length) return `<div class="h1"><b>Новости</b></div><div class="card" style="margin-top:12px"><div class="empty">Сводок пока нет. Они появятся после следующего обновления из чата.</div></div>`;
   markNewsSeen();
-  const [last, ...prev] = D.digests;
+  const last = D.digests[0];
+  const prev = newsDigestsFilter(D.digests.slice(1));
   const n = dg => dg.cats.reduce((s, c) => s + c.items.length, 0);
   return `<div class="h1"><b>Новости</b></div>
     <div class="sec-h" style="margin-top:12px">${newsReqBar()}<span>Последняя · ${fLong(dTime(last.date))}, ${last.date.slice(11, 16)}</span></div>
-    <div class="card" style="padding-bottom:6px">${digestBody(last)}</div>
-    <div class="grp">Предыдущие</div>
-    ${prev.map(dg => `<details class="prev"><summary><span>${fLong(dTime(dg.date))}, ${dg.date.slice(11, 16)}</span><span class="m" style="margin:0">${n(dg)} ${plural(n(dg), ["пост", "поста", "постов"])}</span></summary>${digestBody(dg)}<div style="height:6px"></div></details>`).join("")}`;
+    ${newsSearchInput()}${newsFilterCard(last)}</div>
+    ${newsSearchCounter()}<div class="grp">Предыдущие</div>
+    ${prev.map(dg => `<details class="prev" ${(S.nq || "").trim() ? "open" : ""}><summary><span>${fLong(dTime(dg.date))}, ${dg.date.slice(11, 16)}</span><span class="m" style="margin:0">${n(dg)} ${plural(n(dg), ["пост", "поста", "постов"])}</span></summary>${digestBody(dg)}<div style="height:6px"></div></details>`).join("")}`;
 }
 
 /* ---------- sheets ---------- */
@@ -807,6 +848,8 @@ function render(keepScroll) {
   if (tg) { if (S.tab === "meet" || S.tab === "team" || S.tab === "projects" || S.tab === "files" || $("sheet").classList.contains("on")) tg.BackButton.show(); else tg.BackButton.hide(); }
   const s = $("toolSearch");
   if (s) s.addEventListener("input", e => { S.toolQuery = e.target.value; const pos = e.target.selectionStart; render(true); const n = $("toolSearch"); n.focus(); n.setSelectionRange(pos, pos); });
+  const ns = $("newsSearch");
+  if (ns) ns.addEventListener("input", e => { S.nq = e.target.value; const pos = e.target.selectionStart; render(true); const m = $("newsSearch"); m.focus(); m.setSelectionRange(pos, pos); });
 }
 function needViewer() {
   if (tg) { if (S.me) return true; toast("Чтобы брать задачи, задай имя пользователя (@username) в настройках Telegram."); return false; }
@@ -922,6 +965,28 @@ document.getElementById("app").addEventListener("click", e => {
 case "done-toggle": {
       store.set("dh", store.get("dh") === "1" ? "" : "1");
       render(true);
+      break;
+    }
+case "nd-edit": {
+      const n = (D.nodate || []).find(x => x.key === id);
+      if (!n || !S.owner || !needViewer()) break;
+      nodateSheet(n);
+      break;
+    }
+    case "nd-save": {
+      const n = (D.nodate || []).find(x => x.key === id);
+      if (!n || !S.owner || !needViewer()) break;
+      const title = ($("ndTitle").value || "").replace(/\s+/g, " ").trim();
+      const note = ($("ndNote").value || "").replace(/\s+/g, " ").trim();
+      const url = ($("ndUrl").value || "").trim();
+      if (!title) { toast("Напиши название события"); $("ndTitle").focus(); break; }
+      if (url && !/^https?:\/\//i.test(url)) { toast("Ссылка должна начинаться с https://"); $("ndUrl").focus(); break; }
+      const prev = { title: n.title, note: n.note || "", url: n.url || "" };
+      n.title = title; n.note = note; n.url = url;
+      closeSheet(); render(true);
+      remote("nd_edit", { key: id, title, note, url }, "Событие обновлено",
+        () => { Object.assign(n, prev); },
+        r => { if (r && r.item) { n.title = r.item.title; n.note = r.item.note; n.url = r.item.url; render(true); } });
       break;
     }
     case "viewer-open": viewerSheet(); break;
