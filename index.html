@@ -288,6 +288,7 @@ button.lnk { border: 0; background: none; padding: 0; font: inherit; color: var(
 .mcal-d.today { box-shadow: inset 0 0 0 1px var(--accent, #2f55d4); }
 .mcal-d.sel { background: var(--accent, #2f55d4); color: #fff; font-weight: 600; }
 .mcal-dot { position: absolute; left: 50%; bottom: 2px; width: 4px; height: 4px; border-radius: 50%; transform: translateX(-50%); background: currentColor; }
+.feed-date { margin: 14px 0 2px; padding-top: 10px; border-top: 1px solid var(--sep, #e5e5ea); font-size: 12px; font-weight: 600; color: var(--hint, #7a8694); }
 </style>
 </head>
 <body>
@@ -765,7 +766,7 @@ function newsSearchCounter() {
   const all = [D.digests[0]].concat(D.digests.slice(1)).filter(newsMatch);
   const total = all.reduce((s, dg) => s + newsCards(dg), 0);
   if (!all.length) return `<div class="grp">Ничего не нашлось: «${esc(qs)}»</div>`;
-  return `<div class="grp">Нашлось ${total} ${plural(total, ["новость", "новости", "новостей"])} в ${all.length} ${plural(all.length, ["сводке", "сводках", "сводках"])}</div>`;
+  return `<div class="grp">Нашлось ${total} ${plural(total, ["новость", "новости", "новостей"])}</div>`;
 }
 /* ---------- «Без даты»: редактирование ---------- */
 function nodateBtns(n) {
@@ -784,8 +785,21 @@ function nodateSheet(n) {
     <button class="btn primary wide" data-act="nd-save" data-id="${esc(n.key)}">Сохранить</button>
     <p class="note">С датой карточка переезжает из «Без даты» в календарь с меткой «Подача», и на ней заработает «Подаём от Лабы». Пустая дата вернёт её в «Без даты».</p>`);
 }
+function digestItems(dg) {
+  return dg.cats.reduce((s, c) => s.concat(c.items), []);
+}
 function digestBody(dg) {
-  return dg.cats.map(c => `<div class="cat">${esc(c.name)}</div>${c.items.map(it => `<a class="news-item" href="${esc(it.u)}" target="_blank" rel="noopener">${esc(it.t)}</a>`).join("")}`).join("");
+  return digestItems(dg).map(it => `<a class="news-item" href="${esc(it.u)}" target="_blank" rel="noopener">${esc(it.t)}</a>`).join("");
+}
+function newsFeedHtml(list) {
+  const parts = [];
+  (list || []).forEach((dg, i) => {
+    const its = digestItems(dg);
+    if (!its.length) return;
+    parts.push(`<div class="feed-date"${i ? "" : ' style="border-top:0;margin-top:6px;padding-top:0"'}>${esc(fLong(dTime(dg.date)))}, ${esc(dg.date.slice(11, 16))}</div>`);
+    parts.push(its.map(it => `<a class="news-item" href="${esc(it.u)}" target="_blank" rel="noopener">${esc(it.t)}</a>`).join(""));
+  });
+  return parts.join("");
 }
 function renderNews() {
   if (!D.digests || !D.digests.length) return `<div class="h1"><b>Новости</b></div><div class="card" style="margin-top:12px"><div class="empty">Сводок пока нет. Они появятся после следующего обновления из чата.</div></div>`;
@@ -795,9 +809,8 @@ function renderNews() {
   const n = dg => dg.cats.reduce((s, c) => s + c.items.length, 0);
   return `<div class="h1"><b>Новости</b></div>
     <div class="sec-h" style="margin-top:12px">${newsReqBar()}<span>Последняя · ${fLong(dTime(last.date))}, ${last.date.slice(11, 16)}</span></div>
-    ${newsSearchInput()}${newsFilterCard(last)}</div>
-    ${newsSearchCounter()}<div class="grp">Предыдущие</div>
-    ${prev.map(dg => `<details class="prev" ${(S.nq || "").trim() ? "open" : ""}><summary><span>${fLong(dTime(dg.date))}, ${dg.date.slice(11, 16)}</span><span class="m" style="margin:0">${n(dg)} ${plural(n(dg), ["пост", "поста", "постов"])}</span></summary>${digestBody(dg)}<div style="height:6px"></div></details>`).join("")}`;
+    ${newsSearchInput()}
+    ${newsSearchCounter()}${newsFeedHtml(newsDigestsFilter(D.digests)) ? `<div class="card" style="margin-top:10px;padding-bottom:6px">${newsFeedHtml(newsDigestsFilter(D.digests))}</div>` : ""}`;
 }
 
 /* ---------- sheets ---------- */
