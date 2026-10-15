@@ -270,6 +270,18 @@ button.lnk { border: 0; background: none; padding: 0; font: inherit; color: var(
 .h1 .act { flex: none; font-size: 15px; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; }
 /* files */
 .file-link { display: inline-block; margin-right: 14px; }
+.mcal { margin-top: 12px; padding: 10px 10px 8px; border-radius: 14px; background: var(--bg2, #f4f4f6); }
+.mcal-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.mcal-l { min-width: 0; flex: 1; margin: 0 6px; padding: 4px 10px; border: 0; border-radius: 10px; background: none; font: 600 13.5px/1.3 inherit; font-family: inherit; color: var(--ink, #14202a); cursor: pointer; }
+.mcal-n { flex: none; width: 38px; height: 34px; border: 0; border-radius: 10px; background: none; font-size: 21px; line-height: 1; color: var(--ink, #14202a); cursor: pointer; }
+.mcal-n:active, .mcal-l:active { background: rgba(0, 0, 0, .07); }
+.mcal-g { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; padding-bottom: 4px; }
+.mcal-w { color: var(--hint, #7a8694); font-size: 10.5px; padding: 3px 0; }
+.mcal-d { position: relative; padding: 7px 0; border-radius: 9px; font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--ink, #14202a); }
+.mcal-d.off { visibility: hidden; }
+.mcal-d.today { box-shadow: inset 0 0 0 1px var(--accent, #2f55d4); }
+.mcal-d.sel { background: var(--accent, #2f55d4); color: #fff; font-weight: 600; }
+.mcal-dot { position: absolute; left: 50%; bottom: 2px; width: 4px; height: 4px; border-radius: 50%; transform: translateX(-50%); background: currentColor; }
 </style>
 </head>
 <body>
@@ -624,10 +636,36 @@ function renderTasks() {
 }
 
 /* ---------- calendar ---------- */
+/* ---------- mini month calendar ----------
+   dots reflect the same kind/project chips as the list below;
+   tap a day to filter the list, tap it again (or the month chip) to clear */
+function calMiniHTML(all) {
+  const base = all.filter(it => (S.calKind === "all" || it.kind === S.calKind) && (!S.calProject || it.project === S.calProject));
+  const ti = iso(new Date());
+  if (!S.calMonth) S.calMonth = ti.slice(0, 7);
+  const [Y, M] = S.calMonth.split("-").map(Number); // M is 1-based (from yyyy-mm); JS months are 0-based
+  const first = new Date(Y, M - 1, 1), last = new Date(Y, M, 0);
+  const busy = new Set();
+  base.forEach(it => {
+    if (it.stop < first || it.start > last) return;
+    for (let d = new Date(Math.max(it.start, first)); d <= it.stop && d <= last; d.setDate(d.getDate() + 1)) busy.add(iso(d));
+  });
+  const lead = (first.getDay() + 6) % 7;
+  let cells = "";
+  for (let i = 0; i < lead; i++) cells += `<div class="mcal-d off"></div>`;
+  for (let d = 1; d <= last.getDate(); d++) {
+    const ds = `${S.calMonth}-${String(d).padStart(2, "0")}`;
+    cells += `<div class="mcal-d ${S.calDate === ds ? "sel" : ""}${S.calDate !== ds && ti === ds ? " today" : ""}${S.calDate !== ds && ti !== ds ? " tap" : ""}" data-act="cal-day" data-d="${ds}">${d}${busy.has(ds) ? `<span class="mcal-dot"></span>` : ""}</div>`;
+  }
+  return `<div class="mcal"><div class="mcal-h"><button class="mcal-n" data-act="cal-nav" data-m="-1" aria-label="Предыдущий месяц">‹</button>
+    <button class="mcal-l ${S.calDate ? "" : "tap"}" data-act="cal-nav" data-m="0">${MONN[M - 1]} ${Y}</button>
+    <button class="mcal-n" data-act="cal-nav" data-m="1" aria-label="Следующий месяц">›</button></div>
+    <div class="mcal-g">${["пн", "вт", "ср", "чт", "пт", "сб", "вс"].map(w => `<div class="mcal-w">${w}</div>`).join("")}${cells}</div></div>`;
+}
 function renderCalendar() {
   const all = timeline("all");
   const kinds = [["all", "Все"], ["lab", "Лаба"], ["deadline", "Подача"], ["external", "Внешние"], ["task", "Задачи"]];
-  const pick = it => (S.calKind === "all" || it.kind === S.calKind) && (!S.calProject || it.project === S.calProject);
+  const pick = it => (S.calKind === "all" || it.kind === S.calKind) && (!S.calProject || it.project === S.calProject) && (!S.calDate || (iso(it.start) <= S.calDate && S.calDate <= iso(it.stop)));
   const over = all.filter(it => it.kind === "task" && it.stop < today && pick(it));
   const upcoming = all.filter(it => it.stop >= today && pick(it));
   const groups = {};
@@ -636,14 +674,17 @@ function renderCalendar() {
     <div class="datecol">${it.end ? `<b class="rng">${it.start.getDate()}-${it.stop.getDate()}</b>` : `<b>${it.start.getDate()}</b>`}<small>${WD[it.start.getDay()]}</small></div>
     <div class="grow"><div class="t">${esc(it.title)}</div>${it.note ? `<div class="m">${esc(it.note)}</div>` : ""}
     ${it.links || it.url ? `<div class="links">${it.links ? ext(it.links[0], "Источник в чате") : ""}${it.url ? ext(it.url, "Сайт") : ""}</div>` : ""}${evBlock(it)}${projLine(it)}</div>
-    <span class="pill ${KIND[it.kind][1]}">${KIND[it.kind][0]}</span>${S.owner && it.key && it.kind !== "task" ? delBtn("events", it.key) : ""}</div>`;
+    <span class="pill ${KIND[it.kind][1]}">${KIND[it.kind][0]}</span>${S.owner && it.key && it.kind !== "task" ? (String(it.key).indexOf("nodate:") === 0 ? nodateRowBtn(it) : delBtn("events", it.key)) : ""}</div>`;
   let html = `<div class="h1"><b>Календарь</b><button class="btn mini" data-act="pt-new" data-p="${esc(S.calProject || "")}">+ Точка</button></div><p class="lead">Встречи и вехи Лабы, точки проектов, сроки подачи и внешние события. Отмечай, где участвуешь; по срокам подачи можно сразу завести задачу.</p>
     <div class="chips" role="group" aria-label="Тип">${kinds.map(([k, l]) => `<button class="chip" data-act="cal" data-k="${k}" aria-pressed="${S.calKind === k}">${l}</button>`).join("")}</div>`;
   if (S.calProject) html += `<div class="chips" role="group" aria-label="Проект"><button class="chip" data-act="cal-proj" data-p="" aria-pressed="true">Проект «${esc(S.calProject)}» ✕</button></div>`;
+  html += calMiniHTML(all);
+  if (S.calDate) html += `<div class="chips"><button class="chip" data-act="cal-day" data-d="${esc(S.calDate)}">${esc(fDay(dOnly(S.calDate)))} ✕</button></div>`;
   if (over.length) html += `<div class="grp red">Просроченные задачи <span class="num">${over.length}</span></div><div class="card">${over.map(row).join("")}</div>`;
   Object.keys(groups).forEach(k => { const [y, m] = k.split("-").map(Number); html += `<div class="grp">${MONN[m]} ${y}</div><div class="card">${groups[k].map(row).join("")}</div>`; });
+  if (S.calDate && !over.length && !upcoming.length) html += `<div class="card" style="margin-top:12px"><div class="empty">На ${esc(fDay(dOnly(S.calDate)))} ничего нет. Тап по той же дате снимает фильтр.</div></div>`;
   if (S.calProject && !over.length && !upcoming.length) html += `<div class="card" style="margin-top:12px"><div class="empty">У проекта «${esc(S.calProject)}» впереди пока нет точек.</div><div class="row tap" data-act="pt-new" data-p="${esc(S.calProject)}"><div class="grow"><div class="t"><b>+ Точка</b></div><div class="m">Что и к какому числу должно быть готово</div></div><span class="chev">›</span></div></div>`;
-  if (!S.calProject && (S.calKind === "all" || S.calKind === "external")) html += `<div class="grp">Без даты</div><div class="card">${(D.nodate || []).map(n => `<div class="row"><div class="grow"><div class="t">${esc(n.title)}</div><div class="m">${esc(n.note)}</div>
+  if (!S.calDate && !S.calProject && (S.calKind === "all" || S.calKind === "external")) html += `<div class="grp">Без даты</div><div class="card">${(D.nodate || []).map(n => `<div class="row"><div class="grow"><div class="t">${esc(n.title)}</div><div class="m">${esc(n.note)}</div>
     <div class="links">${ext(n.links[0], "Источник в чате")}${n.url ? ext(n.url, "Сайт") : ""}</div></div>${S.owner && n.key ? nodateBtns(n) : ""}</div>`).join("")}</div>`;
   return html;
 }
@@ -717,13 +758,18 @@ function newsSearchCounter() {
 function nodateBtns(n) {
   return `<button class="act" data-act="nd-edit" data-id="${esc(n.key)}">Изменить</button>` + delBtn("nodate", n.key);
 }
+function nodateRowBtn(it) {
+  // dated calendar rows of former «Без даты» cards: same edit sheet + a trash that hits the nodate section
+  return `<button class="act" data-act="nd-edit" data-id="${esc(it.key)}">Изменить</button>` + delBtn("nodate", it.key);
+}
 function nodateSheet(n) {
   openSheet(`<h3>Событие без даты</h3>
     <label class="fld"><span>Название</span><input class="inp" id="ndTitle" maxlength="160" value="${esc(n.title)}"></label>
     <label class="fld"><span>Заметка</span><input class="inp" id="ndNote" maxlength="300" placeholder="не обязательно" value="${esc(n.note || "")}"></label>
     <label class="fld"><span>Ссылка</span><input class="inp" id="ndUrl" maxlength="500" placeholder="https://..." value="${esc(n.url || "")}"></label>
+    <label class="fld"><span>Дата подачи</span><input class="inp" id="ndDate" type="date" value="${esc(n.date || "")}"></label>
     <button class="btn primary wide" data-act="nd-save" data-id="${esc(n.key)}">Сохранить</button>
-    <p class="note">Правку видит вся Лаба. Источник в чате остаётся прежним: ссылка ведёт на исходное сообщение.</p>`);
+    <p class="note">С датой карточка переезжает из «Без даты» в календарь с меткой «Подача», и на ней заработает «Подаём от Лабы». Пустая дата вернёт её в «Без даты».</p>`);
 }
 function digestBody(dg) {
   return dg.cats.map(c => `<div class="cat">${esc(c.name)}</div>${c.items.map(it => `<a class="news-item" href="${esc(it.u)}" target="_blank" rel="noopener">${esc(it.t)}</a>`).join("")}`).join("");
@@ -968,25 +1014,33 @@ case "done-toggle": {
       break;
     }
 case "nd-edit": {
-      const n = (D.nodate || []).find(x => x.key === id);
+      const n = (D.nodate || []).find(x => x.key === id) || (D.events || []).find(x => x.key === id);
       if (!n || !S.owner || !needViewer()) break;
       nodateSheet(n);
       break;
     }
     case "nd-save": {
-      const n = (D.nodate || []).find(x => x.key === id);
+      const fromNodate = (D.nodate || []).find(x => x.key === id);
+      const n = fromNodate || (D.events || []).find(x => x.key === id);
       if (!n || !S.owner || !needViewer()) break;
       const title = ($("ndTitle").value || "").replace(/\s+/g, " ").trim();
       const note = ($("ndNote").value || "").replace(/\s+/g, " ").trim();
       const url = ($("ndUrl").value || "").trim();
+      const date = ($("ndDate").value || "").trim();
       if (!title) { toast("Напиши название события"); $("ndTitle").focus(); break; }
       if (url && !/^https?:\/\//i.test(url)) { toast("Ссылка должна начинаться с https://"); $("ndUrl").focus(); break; }
-      const prev = { title: n.title, note: n.note || "", url: n.url || "" };
-      n.title = title; n.note = note; n.url = url;
+      if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast("Дата в формате ГГГГ-ММ-ДД"); $("ndDate").focus(); break; }
+      const prev = { title: n.title, note: n.note || "", url: n.url || "", date: n.date || "", nodate: !!fromNodate };
+      const move = o => {
+        D.nodate = (D.nodate || []).filter(x => x.key !== id);
+        D.events = (D.events || []).filter(x => x.key !== id);
+        (o.date ? D.events : D.nodate).push(Object.assign({}, n, o, o.date ? { kind: "deadline" } : {}));
+      };
+      move({ title, note, url, date });
       closeSheet(); render(true);
-      remote("nd_edit", { key: id, title, note, url }, "Событие обновлено",
-        () => { Object.assign(n, prev); },
-        r => { if (r && r.item) { n.title = r.item.title; n.note = r.item.note; n.url = r.item.url; render(true); } });
+      remote("nd_edit", { key: id, title, note, url, date }, date ? "Дата подачи поставлена" : "Событие обновлено",
+        () => { move(prev); },
+        r => { if (r && r.item) { /* the optimistic copy already shows the saved state */ } });
       break;
     }
     case "viewer-open": viewerSheet(); break;
@@ -1175,6 +1229,18 @@ case "nd-edit": {
     case "proj-open": closeSheet(); projSheet(el.dataset.p); break;
     case "proj-cal": closeSheet(); S.tab = "calendar"; S.calProject = el.dataset.p || null; S.calKind = "all"; S.day = null; render(); break;
     case "proj-tasks": closeSheet(); S.tab = "tasks"; S.seg = "all"; S.project = el.dataset.p || null; render(); break;
+case "cal-day": {
+      S.calDate = S.calDate === el.dataset.d ? "" : el.dataset.d;
+      S.calMonth = el.dataset.d.slice(0, 7);
+      render(true);
+      break;
+    }
+    case "cal-nav": {
+      if (el.dataset.m === "0") { const t = iso(new Date()); S.calMonth = t.slice(0, 7); S.calDate = ""; }
+      else { const [y, m] = S.calMonth.split("-").map(Number); const n = new Date(y, m - 1 + Number(el.dataset.m), 1); S.calMonth = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`; }
+      render(true);
+      break;
+    }
     case "cal-proj": S.calProject = el.dataset.p || null; render(true); break;
     case "pt-new": if (needViewer()) pointSheet({ project: el.dataset.p || (S.tab === "calendar" ? S.calProject || "" : "") }); break;
     case "pt-due": { const f = $("ptDate"); if (f) f.value = el.dataset.d; break; }
