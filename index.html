@@ -474,14 +474,21 @@ function homeAttention() {
 /* variant B (15.10.2026): the digest lives in the portal; the group notice opens it */
 function newsSeenId() { const v = store.get("news"); return v == null ? "" : v; }
 function markNewsSeen() { const dg = (D.digests || [])[0]; if (dg) store.set("news", String(dg.id)); }
-function homeNews() {
-  const dg = (D.digests || [])[0]; if (!dg || newsSeenId() === String(dg.id)) return "";
-  const n = dg.cats.reduce((s, c) => s + c.items.length, 0);
-  return `<section class="sec"><div class="card"><div class="row tap" data-act="news-open">
-    <div class="grow"><div class="t"><b>Новая сводка</b> <span class="pill p-amber">${n} ${plural(n, ["пост", "поста", "постов"])}</span></div>
-      <div class="m">${fLong(dTime(dg.date))}, ${dg.date.slice(11, 16)}</div></div>
-    <span class="chev">›</span></div></div></section>`;
+function newsReqState() {
+  const ts = D.news_req && Number(D.news_req.ts);
+  if (!ts) return { active: false };
+  const h = Date.now() - ts; // the server stores the request in ms (Date.now())
+  return { active: h >= 0 && h < 7200000, by: D.news_req.by };
 }
+function newsReqBar() {
+  if (!newsReqState().active) return `<div class="card"><div class="row tap" data-act="news-update">
+    <div class="grow"><div class="t"><b>Прислать обновления</b></div>
+      <div class="m">Новых постов много, а сводки ещё нет? Попроси «Сводку» собрать дайджест сейчас, не дожидаясь 21:00.</div></div>
+    <span class="chev">›</span></div></div>`;
+  return `<div class="card"><div class="row"><div class="grow"><div class="t"><b>Обновления запрошены</b></div>
+    <div class="m">Соберутся в течение часа, «Сводка» напишет в топик «Дайджесты». Повторная просьба доступна через 30 минут.</div></div></div></div>`;
+}
+
 function homeRibbon() {
   const items = timeline(S.viewer);
   const horizon = 28, end = addDays(today, horizon - 1);
@@ -673,7 +680,7 @@ function renderNews() {
   const [last, ...prev] = D.digests;
   const n = dg => dg.cats.reduce((s, c) => s + c.items.length, 0);
   return `<div class="h1"><b>Новости</b></div>
-    <div class="sec-h" style="margin-top:12px"><span>Последняя · ${fLong(dTime(last.date))}, ${last.date.slice(11, 16)}</span>${ext(last.link, "В чате").replace("<a ", '<a class="act" ')}</div>
+    <div class="sec-h" style="margin-top:12px">${newsReqBar()}<span>Последняя · ${fLong(dTime(last.date))}, ${last.date.slice(11, 16)}</span>${ext(last.link, "В чате").replace("<a ", '<a class="act" ')}</div>
     <div class="card" style="padding-bottom:6px">${digestBody(last)}</div>
     <div class="grp">Предыдущие</div>
     ${prev.map(dg => `<details class="prev"><summary><span>${fLong(dTime(dg.date))}, ${dg.date.slice(11, 16)}</span><span class="m" style="margin:0">${n(dg)} ${plural(n(dg), ["пост", "поста", "постов"])}</span></summary>${digestBody(dg)}<div style="height:6px"></div></details>`).join("")}`;
@@ -701,6 +708,7 @@ function taskSheet(id) {
     <dt>Кто</dt><dd>${hs.length ? hs.map(h => `<button class="lnk" data-act="person-open" data-h="${esc(h)}">${esc(nm(h))}</button> <span class="m" style="display:inline">${esc(h)}</span>`).join("<br>") : "никто, нужны руки"}</dd>
     <dt>Срок</dt><dd>${t.deadline ? fLong(dOnly(t.deadline)) + (dueLabel(t) ? ` · <span class="pill ${dueLabel(t).cls}">${dueLabel(t).txt}</span>` : "") : "без срока"}</dd>
     <dt>Статус</dt><dd>${isDone ? "Готово" : esc(t.status || "без статуса")}</dd></dl>
+    ${S.owner && !isDone && !pausedOf(t) ? assignChips(t, hs) : ""}
     ${pausedOf(t) ? `<p class="note" style="margin:0 0 10px">Задача на паузе: «Напоминатель» о ней молчит, в календаре, «Требует внимания» и «Нужны руки» её нет. Люди и срок сохранены.${S.owner ? "" : " Снять с паузы может Антон."}</p>` : ""}
     <div class="stack">${!mine && !isDone && !pausedOf(t) ? `<button class="btn primary wide" data-act="task-take" data-id="${t.id}">Беру</button>` : ""}
       <button class="btn wide" data-act="task-done" data-id="${t.id}">${isDone ? "Вернуть в работу" : "Готово"}</button>
@@ -712,6 +720,15 @@ function taskSheet(id) {
     <p class="note">${tg && S.me && S.viewer !== "all" && S.viewer.toLowerCase() !== S.me.toLowerCase() ? `Ты смотришь как ${esc(nm(S.viewer))}, но кнопки работают от твоего имени. ` : ""}«Беру», «Готово», сроки и возврат в «Нужны руки» сразу записываются в таблицу задач, «Напоминатель» это учтёт.</p>`);
 }
 
+
+function assignChips(t, hs) {
+  const people = D.people.slice();
+  hs.forEach(h => { if (!people.some(p => lc(p.handle) === lc(h))) people.push({ handle: h, name: h }); });
+  const one = h => hs.some(x => lc(x) === lc(h));
+  return `<div class="fld" style="margin:10px 0 2px"><span>Назначить ответственного</span>
+    <div class="chips in">${people.map(p => `<button class="chip" data-act="ts-assign" data-id="${esc(t.id)}" data-h="${esc(p.handle)}" aria-pressed="${one(p.handle)}">${esc(p.name)}</button>`).join("")}</div>
+    <div class="m" style="margin:6px 4px 0">Тапни по имени: он станет ответственным. Тапни по выбранному: сниму, поедет в «Нужны руки». До четырёх человек, сразу в таблицу.</div></div>`;
+}
 /* ---------- toast ---------- */
 let toastTimer;
 function toast(msg) { const el = $("toast"); el.textContent = msg; el.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove("on"), 2600); }
@@ -944,6 +961,22 @@ document.getElementById("app").addEventListener("click", e => {
         () => refresh());
       break;
     }
+
+    case "ts-assign": {
+      const t = D.tasks.find(x => x.id === id); if (!t || !S.owner || !needViewer() || doneOf(t)) break;
+      const hs = taskHandles(t), h = el.dataset.h || "";
+      const exists = hs.some(x => lc(x) === lc(h));
+      if (!exists && hs.length >= 4) { toast("Не больше четырёх человек"); break; }
+      const next = exists ? hs.filter(x => lc(x) !== lc(h)) : [h];
+      const prev = { handles: t.handles.slice() }, taken = S.taken[t.id];
+      t.handles = next.slice(); delete S.taken[t.id];
+      taskSheet(id); render(true);
+      remote("edit_task", { row: t.row, title: t.title, set: { handles: next } },
+        exists ? "Ответственный снят, задача идёт в «Нужны руки»" : "Ответственный назначен: " + nm(h),
+        () => { t.handles = prev.handles; if (taken) S.taken[t.id] = taken; taskSheet(id); render(true); },
+        () => refresh());
+      break;
+    }
     case "task-pause": case "task-resume": {
       const t = D.tasks.find(x => x.id === id); if (!t || !S.owner || !needViewer()) break;
       const on = a === "task-pause", prev = { paused: t.paused, status: t.status };
@@ -973,6 +1006,16 @@ document.getElementById("app").addEventListener("click", e => {
     case "undo-del": undoDelete(); break;
     case "projects-open": if (S.tab !== "team" && S.tab !== "meet" && S.tab !== "projects") S.prevTab = S.tab; S.tab = "projects"; closeSheet(); render(); break;
     case "news-open": store.set("news", String((D.digests || [])[0].id || "")); S.tab = "news"; closeSheet(); render(); break;
+    case "news-update": {
+      if (!needViewer()) break;
+      if (newsReqState().active) { toast("Обновления уже запрошены"); break; }
+      D.news_req = { ts: Date.now(), by: S.me || "" };
+      render(true);
+      remote("news_update", {}, "Запрос принят: сводка соберётся в течение часа",
+        () => { D.news_req = null; render(true); },
+        () => refresh());
+      break;
+    }
     case "team-open": if (S.tab !== "team" && S.tab !== "meet" && S.tab !== "projects") S.prevTab = S.tab; S.tab = "team"; closeSheet(); render(); break;
 
     case "files-open": if (S.tab !== "files" && S.tab !== "meet" && S.tab !== "team" && S.tab !== "projects") S.prevTab = S.tab;
