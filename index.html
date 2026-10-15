@@ -474,6 +474,14 @@ function homeAttention() {
 /* variant B (15.10.2026): the digest lives in the portal; the group notice opens it */
 function newsSeenId() { const v = store.get("news"); return v == null ? "" : v; }
 function markNewsSeen() { const dg = (D.digests || [])[0]; if (dg) store.set("news", String(dg.id)); }
+function homeNews() {
+  const dg = (D.digests || [])[0]; if (!dg || newsSeenId() === String(dg.id)) return "";
+  const n = dg.cats.reduce((s, c) => s + c.items.length, 0);
+  return `<section class="sec"><div class="card"><div class="row tap" data-act="news-open">
+    <div class="grow"><div class="t"><b>Новая сводка</b> <span class="pill p-amber">${n} ${plural(n, ["пост", "поста", "постов"])}</span></div>
+      <div class="m">${fLong(dTime(dg.date))}, ${dg.date.slice(11, 16)}</div></div>
+    <span class="chev">›</span></div></div></section>`;
+}
 function newsReqState() {
   const ts = D.news_req && Number(D.news_req.ts);
   if (!ts) return { active: false };
@@ -489,7 +497,6 @@ function newsReqBar() {
   return `<div class="card"><div class="row"><div class="grow"><div class="t"><b>Обновления запрошены</b></div>
     <div class="m">Соберутся в течение часа, «Сводка» напишет в топик «Дайджесты». Повторная просьба доступна через 30 минут.</div></div></div></div>`;
 }
-
 function homeRibbon() {
   const items = timeline(S.viewer);
   const horizon = 28, end = addDays(today, horizon - 1);
