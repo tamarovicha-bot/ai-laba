@@ -509,8 +509,7 @@ function newsReqState() {
 function newsReqBar() {
   if (!S.owner) return ""; // «Прислать обновления» for the owner only, as decided on 15.10
   if (!newsReqState().active) return `<div class="card"><div class="row tap" data-act="news-update">
-    <div class="grow"><div class="t"><b>Прислать обновления</b></div>
-      <div class="m">Новых постов много, а сводки ещё нет? Попроси «Сводку» собрать дайджест сейчас, не дожидаясь 21:00.</div></div>
+    <div class="grow"><div class="t"><b>Прислать обновления</b></div></div>
     <span class="chev">›</span></div></div>`;
   return `<div class="card"><div class="row"><div class="grow"><div class="t"><b>Обновления запрошены</b></div></div></div></div>`;
 }
