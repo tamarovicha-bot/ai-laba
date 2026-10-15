@@ -394,10 +394,14 @@ function bucket(t) {
 }
 function doneGrp(ts, label) {
   const hid = store.get("dh") === "1"; // local choice, not account state
-  return `<div class="grp tap" data-act="done-toggle">${label}${hid ? " (скрыто)" : ""} <span class="num">${ts.length}</span>`
+  const hx = hiddenDone();
+  const vis = ts.filter(t => hx.indexOf(t.id) < 0);
+  if (!vis.length) return `<div class="grp">${label} <span class="m" style="font-weight:400;margin-left:4px">всё убрано.</span><button class="lnk" style="margin-left:6px" data-act="done-restore">вернуть скрытые</button></div>`;
+  return `<div class="grp tap" data-act="done-toggle">${label}${hid ? " (скрыто)" : ""} <span class="num">${vis.length}</span>`
     + `<span class="chev" style="margin-left:4px">${hid ? "‹" : "›"}</span></div>`
-    + (hid ? "" : `<div class="card">${ts.map(t => taskRow(t)).join("")}</div>`);
+    + (hid ? "" : `<div class="card">${vis.map(t => taskRow(t)).join("")}</div>`);
 }
+function hiddenDone() { return (store.get("dhx") || "").split(",").filter(Boolean); }
 const BUCKETS = [["overdue", "Просрочено"], ["today", "Сегодня"], ["week", "На неделе"], ["later", "Позже"], ["nodate", "Без срока"], ["paused", "На паузе"], ["done", "Сделано"]];
 function dueLabel(t) {
   if (!t.deadline) return null;
@@ -818,9 +822,9 @@ function renderNews() {
   const prev = newsDigestsFilter(D.digests.slice(1));
   const n = dg => dg.cats.reduce((s, c) => s + c.items.length, 0);
   return `<div class="h1"><b>Новости</b></div>
-    <div class="sec-h" style="margin-top:12px">${newsReqBar()}<span>Последняя · ${fLong(dTime(last.date))}, ${last.date.slice(11, 16)}</span></div>
+    ${newsReqBar() ? `<div class="sec-h" style="margin-top:4px">${newsReqBar()}</div>` : ""}
     ${newsSearchInput()}
-    ${newsSearchCounter()}${newsFeedHtml(newsDigestsFilter(D.digests)) ? `<div class="card" style="margin-top:10px;padding-bottom:6px">${newsFeedHtml(newsDigestsFilter(D.digests))}</div>` : ""}`;
+    ${newsSearchCounter()}${newsFeedHtml(newsDigestsFilter(D.digests)) ? `<div class="card" style="margin-top:6px;padding-bottom:6px">${newsFeedHtml(newsDigestsFilter(D.digests))}</div>` : ""}`;
 }
 
 /* ---------- sheets ---------- */
@@ -849,6 +853,7 @@ function taskSheet(id) {
     ${pausedOf(t) ? `<p class="note" style="margin:0 0 10px">Задача на паузе: «Напоминатель» о ней молчит, в календаре, «Требует внимания» и «Нужны руки» её нет. Люди и срок сохранены.${S.owner ? "" : " Снять с паузы может Антон."}</p>` : ""}
     <div class="stack">${!mine && !isDone && !pausedOf(t) ? `<button class="btn primary wide" data-act="task-take" data-id="${t.id}">Беру</button>` : ""}
       <button class="btn wide" data-act="task-done" data-id="${t.id}">${isDone ? "Вернуть в работу" : "Готово"}</button>
+      ${isDone ? `<button class="btn wide" data-act="done-hide" data-id="${t.id}">Убрать из списка</button>` : ""}
       ${S.owner && !isDone ? `<button class="btn wide" data-act="task-edit" data-id="${t.id}">Изменить</button>
       <button class="btn wide${pausedOf(t) ? " primary" : ""}" data-act="${pausedOf(t) ? "task-resume" : "task-pause"}" data-id="${t.id}">${pausedOf(t) ? "Возобновить" : "На паузу"}</button>` : ""}
       ${S.owner && !isDone && !pausedOf(t) ? `<button class="btn wide" data-act="due-open" data-id="${t.id}">${t.deadline ? "Перенести срок" : "Поставить срок"}</button>` : ""}
@@ -1050,6 +1055,19 @@ document.getElementById("app").addEventListener("click", e => {
     case "day": S.day = S.day === el.dataset.d ? null : el.dataset.d; render(true); break;
 case "done-toggle": {
       store.set("dh", store.get("dh") === "1" ? "" : "1");
+      render(true);
+      break;
+    }
+    case "done-hide": {
+      const hx = hiddenDone(); if (hx.indexOf(id) < 0) hx.push(id);
+      store.set("dhx", hx.join(","));
+      toast("Убрал из «Сделано»");
+      $("sheet").classList.contains("on") && closeSheet();
+      render(true);
+      break;
+    }
+    case "done-restore": {
+      store.set("dhx", "");
       render(true);
       break;
     }
