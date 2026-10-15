@@ -481,6 +481,7 @@ function newsReqState() {
   return { active: h >= 0 && h < 7200000, by: D.news_req.by };
 }
 function newsReqBar() {
+  if (!S.owner) return ""; // «Прислать обновления» for the owner only, as decided on 15.10
   if (!newsReqState().active) return `<div class="card"><div class="row tap" data-act="news-update">
     <div class="grow"><div class="t"><b>Прислать обновления</b></div>
       <div class="m">Новых постов много, а сводки ещё нет? Попроси «Сводку» собрать дайджест сейчас, не дожидаясь 21:00.</div></div>
@@ -1007,6 +1008,7 @@ document.getElementById("app").addEventListener("click", e => {
     case "projects-open": if (S.tab !== "team" && S.tab !== "meet" && S.tab !== "projects") S.prevTab = S.tab; S.tab = "projects"; closeSheet(); render(); break;
     case "news-open": store.set("news", String((D.digests || [])[0].id || "")); S.tab = "news"; closeSheet(); render(); break;
     case "news-update": {
+      if (!S.owner) break; // owner-only: participants and other viewers do not request digests
       if (!needViewer()) break;
       if (newsReqState().active) { toast("Обновления уже запрошены"); break; }
       D.news_req = { ts: Date.now(), by: S.me || "" };
