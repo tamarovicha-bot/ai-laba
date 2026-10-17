@@ -1389,6 +1389,17 @@ case "cal-day": {
         deadline: x.deadline && x.deadline >= iso(today) ? x.deadline : "", decision: x.key });
       break;
     }
+    case "dec-edit": if (needViewer()) decEditSheet(el.dataset.k); break;
+    case "dec-save": decSave(el.dataset.k); break;
+    case "dec-drop": {
+      const x = (D.decisions.items || []).find(y => y.key === el.dataset.k); if (!x) break;
+      confirmAsk(`Убрать решение «${x.title}»?`, () => {
+        const i = D.decisions.items.indexOf(x); if (i < 0) return;
+        D.decisions.items.splice(i, 1); render(true);
+        remote("dec_drop", { key: x.key }, "Решение убрано", () => { D.decisions.items.splice(Math.min(i, D.decisions.items.length), 0, x); });
+      });
+      break;
+    }
     case "hyg": hygSheet(el.dataset.k); break;
     case "ev-go": {
       if (!needViewer()) break;
@@ -1625,13 +1636,38 @@ function hygSheet(k) {
 }
 
 /* ---------- B: the meeting screen: agenda, deadlines before it, free tasks, decisions into tasks ---------- */
+function decEditSheet(key) {
+  const x = (D.decisions.items || []).find(y => y.key === key); if (!x) return;
+  openSheet(`<h3>Решение</h3>
+  <label class="fld"><span>Что решили</span><input class="inp" id="decT" maxlength="200" value="${esc(x.title || "")}"></label>
+  <label class="fld"><span>Детали</span><textarea class="inp" id="decX" maxlength="1000" rows="3" placeholder="можно оставить пустым">${esc(x.text || "")}</textarea></label>
+  <div class="stack"><button class="btn primary wide" data-act="dec-save" data-k="${esc(key)}">Сохранить</button></div>
+  <p class="note">Правка видна всем и переживает обновление из чата.</p>`);
+  const t = $("decT"); if (t) {
+    t.focus();
+    const go = () => { const b = document.querySelector('[data-act="dec-save"]'); if (b) b.click(); };
+    t.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+    const x2 = $("decX"); if (x2) { x2.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); go(); } }); }
+  }
+}
+function decSave(key) {
+  const x = (D.decisions.items || []).find(y => y.key === key); if (!x) return;
+  const tIn = $("decT"), xIn = $("decX");
+  const t = tIn ? tIn.value.replace(/\s+/g, " ").trim() : "", tx = xIn ? xIn.value.replace(/\s+/g, " ").trim() : "";
+  if (!t) { toast("Напиши, что решили"); return; }
+  const prev = { title: x.title, text: x.text || "" };
+  x.title = t; x.text = tx; render(true); closeSheet();
+  remote("dec_edit", { key, title: t, text: tx }, "Решение сохранено",
+    () => { Object.assign(x, prev); render(true); });
+}
 function decisionRow(x) {
   const who = x.handles && x.handles.length ? names(x.handles) : "", when = x.deadline ? "до " + fDay(dOnly(x.deadline)) : "";
   const draft = x.task ? `Черновик задачи: ${esc(x.task)}${who || when ? " · " + esc([who, when].filter(Boolean).join(", ")) : ""}` : "";
   return `<div class="row"><div class="grow"><div class="t"><b>${esc(x.title)}</b></div><div class="m" style="color:var(--ink);opacity:.86">${esc(x.text || "")}</div>
     ${x.made ? `<div class="draft">✓ В таблице: «${esc(x.made.title)}»</div>` : draft ? `<div class="draft">${draft}</div>` : ""}
     ${x.links && x.links[0] ? `<div class="links">${ext(x.links[0], "В чате")}</div>` : ""}</div>
-    ${S.owner && x.key && !x.made ? `<button class="btn mini" data-act="dec-task" data-k="${esc(x.key)}">В задачу</button>` : ""}</div>`;
+    ${S.owner && x.key && !x.made ? `<button class="btn mini" data-act="dec-task" data-k="${esc(x.key)}">В задачу</button>` : ""}
+    ${S.owner && x.key ? `<button class="btn mini" data-act="dec-edit" data-k="${esc(x.key)}">Изменить</button><button class="btn mini danger" data-act="dec-drop" data-k="${esc(x.key)}">Убрать</button>` : ""}</div>`;
 }
 function renderMeet() {
   const m = meetDay(), ag = openAgenda(), past = (D.agenda || []).filter(x => x.done), me = S.me ? S.me.toLowerCase() : "";
