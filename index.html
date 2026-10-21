@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- ai-laba build 2026-10-21 19:58-2 -->
 <html lang="ru">
 <head>
 <meta charset="utf-8">
@@ -289,6 +290,9 @@ button.lnk { border: 0; background: none; padding: 0; font: inherit; color: var(
 .mcal-d.sel { background: var(--accent, #2f55d4); color: #fff; font-weight: 600; }
 .mcal-dot { position: absolute; left: 50%; bottom: 2px; width: 4px; height: 4px; border-radius: 50%; transform: translateX(-50%); background: currentColor; }
 .feed-date { margin: 14px 0 2px; padding-top: 10px; border-top: 1px solid var(--sep, #e5e5ea); font-size: 12px; font-weight: 600; color: var(--hint, #7a8694); }
+.news-row { display: flex; align-items: flex-start; }
+.news-row .news-item { flex: 1; min-width: 0; padding-right: 2px; }
+.news-row .del { margin: 3px 10px 0 0; }
 </style>
 </head>
 <body>
@@ -684,7 +688,7 @@ function renderCalendar() {
     <div class="datecol">${it.end ? `<b class="rng">${it.start.getDate()}-${it.stop.getDate()}</b>` : `<b>${it.start.getDate()}</b>`}<small>${WD[it.start.getDay()]}</small></div>
     <div class="grow"><div class="t">${esc(it.title)}</div>${it.note ? `<div class="m">${esc(it.note)}</div>` : ""}
     ${it.links || it.url ? `<div class="links">${it.links ? ext(it.links[0], "Источник в чате") : ""}${it.url ? ext(it.url, "Сайт") : ""}</div>` : ""}${evBlock(it)}${projLine(it)}</div>
-    <span class="pill ${KIND[it.kind][1]}">${KIND[it.kind][0]}</span>${S.owner && it.key && it.kind !== "task" ? (String(it.key).indexOf("nodate:") === 0 ? nodateRowBtn(it) : delBtn("events", it.key)) : ""}</div>`;
+    <span class="pill ${KIND[it.kind][1]}">${KIND[it.kind][0]}</span>${S.owner && it.key && it.kind !== "task" ? (String(it.key).indexOf("nodate:") === 0 ? nodateRowBtn(it) : evRowBtns(it)) : ""}</div>`;
   let html = `<div class="h1"><b>Календарь</b><button class="btn mini" data-act="pt-new" data-p="${esc(S.calProject || "")}">+ Точка</button></div><p class="lead">Встречи и вехи Лабы, точки проектов, сроки подачи и внешние события. Отмечай, где участвуешь; по срокам подачи можно сразу завести задачу.</p>
     <div class="chips" role="group" aria-label="Тип">${kinds.map(([k, l]) => `<button class="chip" data-act="cal" data-k="${k}" aria-pressed="${S.calKind === k}">${l}</button>`).join("")}</div>`;
   if (S.calProject) html += `<div class="chips" role="group" aria-label="Проект"><button class="chip" data-act="cal-proj" data-p="" aria-pressed="true">Проект «${esc(S.calProject)}» ✕</button></div>`;
@@ -776,6 +780,24 @@ function newsSearchCounter() {
 function nodateBtns(n) {
   return `<button class="act" data-act="nd-edit" data-id="${esc(n.key)}">Изменить</button>` + delBtn("nodate", n.key);
 }
+/* ---------- calendar: owner edits one chat event ---------- */
+function evRowBtns(it) {
+  return `<button class="act" data-act="ev-edit" data-id="${esc(it.key)}">Изменить</button>` + delBtn("events", it.key);
+}
+function eventSheet(ev) {
+  openSheet(`<h3>Событие</h3>
+    <label class="fld"><span>Название</span><input class="inp" id="evT" maxlength="160" value="${esc(ev.title)}"></label>
+    <label class="fld"><span>Дата начала</span><input class="inp" id="evD" type="date" value="${esc(String(ev.date || "").slice(0, 10))}"></label>
+    <label class="fld"><span>Окончание</span><input class="inp" id="evE" type="date" value="${esc(ev.end ? String(ev.end).slice(0, 10) : "")}"></label>
+    <button class="btn primary wide" data-act="ev-save" data-id="${esc(ev.key)}">Сохранить</button>
+    <p class="note">Название и даты меняются для всех. «Участвую», проект и заявка остаются привязаны к событию.</p>`);
+  setTimeout(() => { const i = $("evT"); if (i) i.focus(); }, 50);
+}
+document.addEventListener("keydown", e => {
+  if (e.key !== "Enter" || !e.target || e.target.id !== "evT") return;
+  const b = document.querySelector('[data-act="ev-save"]');
+  if (b) { e.preventDefault(); b.click(); }
+});
 function nodateRowBtn(it) {
   // dated calendar rows of former «Без даты» cards: same edit sheet + a trash that hits the nodate section
   return `<button class="act" data-act="nd-edit" data-id="${esc(it.key)}">Изменить</button>` + delBtn("nodate", it.key);
@@ -811,9 +833,38 @@ function newsFeedHtml(list) {
     const its = day.cats.reduce((s, c) => s.concat(c.items), []);
     if (!its.length) return;
     parts.push(`<div class="feed-date"${i ? "" : ' style="border-top:0;margin-top:6px;padding-top:0"'}>${esc(fLong(dTime(day.date)))} · ${its.length} ${plural(its.length, ["новость", "новости", "новостей"])}</div>`);
-    parts.push(day.cats.map(c => `<div class="cat">${esc(c.name)}</div>${c.items.map(it => `<a class="news-item" href="${esc(it.u)}" target="_blank" rel="noopener">${esc(it.t)}</a>`).join("")}`).join(""));
+    parts.push(day.cats.map(c => `<div class="cat">${esc(c.name)}</div>${c.items.map(newsItemHtml).join("")}`).join(""));
   });
   return parts.join("");
+}
+/* ---------- news: owner deletes one line of the feed ---------- */
+function newsItemHtml(it) {
+  const a = `<a class="news-item" href="${esc(it.u)}" target="_blank" rel="noopener">${esc(it.t)}</a>`;
+  return (S.owner && it.key) ? `<div class="news-row">${a}${delBtn("news", it.key)}</div>` : a;
+}
+function newsDelete(key) {
+  let hit = null;
+  (D.digests || []).forEach(dg => (dg.cats || []).forEach(c => (c.items || []).forEach(it => { if (it && it.key === key) hit = it; })));
+  if (!hit) return;
+  const title = hit.t || "новость";
+  askDelete(title, () => {
+    commitDelete(false); // one pending deletion at a time: the previous one goes now
+    let ref = null, at = -1;
+    (D.digests || []).some(dg => (dg.cats || []).some(c => {
+      const i = (c.items || []).findIndex(x => x && x.key === key);
+      if (i >= 0) { ref = c; at = i; return true; }
+      return false;
+    }));
+    if (!ref) return;
+    const item = ref.items.splice(at, 1)[0];
+    render(true); haptic("warning");
+    let left = 5;
+    const p = { kind: "news", key, title, msg: `Новость «${title}» удалена`,
+      putback: () => { ref.items.splice(Math.min(at, ref.items.length), 0, item); } };
+    p.tick = setInterval(() => { left -= 1; if (left > 0) showUndo(title, left); }, 1000);
+    p.timer = setTimeout(() => commitDelete(false), 5000);
+    pendingDel = p; showUndo(title, left);
+  }, "Новость");
 }
 function renderNews() {
   if (!D.digests || !D.digests.length) return `<div class="h1"><b>Новости</b></div><div class="card" style="margin-top:12px"><div class="empty">Сводок пока нет. Они появятся после следующего обновления из чата.</div></div>`;
@@ -985,8 +1036,8 @@ function confirmAsk(text, yes) {
    The request goes out only after the undo window (or right away when the app is closed). */
 let pendingDel = null;
 const delBtn = (kind, key) => `<button class="del" data-act="card-del" data-kind="${kind}" data-key="${esc(key)}" aria-label="Удалить"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.8 7l.9 12.2h8.6L17.2 7M10.2 10.6v5.6M13.8 10.6v5.6"/></svg></button>`;
-function askDelete(title, yes) {
-  const message = `Удалить «${title}»? Карточка исчезнет из портала у всех. Отменить можно в течение 5 секунд.`;
+function askDelete(title, yes, noun) {
+  const message = `Удалить «${title}»? ${noun || "Карточка"} исчезнет из портала у всех. Отменить можно в течение 5 секунд.`;
   try {
     if (tg && tg.isVersionAtLeast("6.2")) {
       tg.showPopup({ title: "Ты уверен?", message: message.slice(0, 256),
@@ -1003,7 +1054,7 @@ function showUndo(title, left) {
   $("undoBtn").textContent = `Отменить · ${left}`;
   $("undo").hidden = false;
 }
-function restoreCard(p) { const arr = D[p.kind] || (D[p.kind] = []); arr.splice(Math.min(p.idx, arr.length), 0, p.item); }
+function restoreCard(p) { if (p.putback) { p.putback(); return; } const arr = D[p.kind] || (D[p.kind] = []); arr.splice(Math.min(p.idx, arr.length), 0, p.item); }
 function cardDelete(kind, key) {
   const arr = D[kind] || [], idx = arr.findIndex(x => x.key === key);
   if (idx < 0) return;
@@ -1035,7 +1086,7 @@ function commitDelete(leaving) {
     navigator.sendBeacon(window.LAB_API, JSON.stringify(Object.assign({ action: "hide_card", initData: tg ? tg.initData : "" }, payload)));
     return;
   }
-  remote("hide_card", payload, `Карточка «${p.title}» удалена`, () => restoreCard(p));
+  remote("hide_card", payload, p.msg || `Карточка «${p.title}» удалена`, () => restoreCard(p));
 }
 document.getElementById("app").addEventListener("click", e => {
   const el = e.target.closest("[data-act]"); if (!el) return;
@@ -1099,6 +1150,30 @@ case "nd-edit": {
       remote("nd_edit", { key: id, title, note, url, date }, date ? "Дата подачи поставлена" : "Событие обновлено",
         () => { move(prev); },
         r => { if (r && r.item) { /* the optimistic copy already shows the saved state */ } });
+      break;
+    }
+    case "ev-edit": {
+      const ev = (D.events || []).find(x => x.key === el.dataset.id);
+      if (!ev || !S.owner || !needViewer()) break;
+      eventSheet(ev);
+      break;
+    }
+    case "ev-save": {
+      const ev = (D.events || []).find(x => x.key === id);
+      if (!ev || !S.owner || !needViewer()) break;
+      const title = ($("evT").value || "").replace(/\s+/g, " ").trim();
+      const date = ($("evD").value || "").trim();
+      const end = ($("evE").value || "").trim();
+      if (!title) { toast("Напиши название события"); $("evT").focus(); break; }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast("Дата в формате ГГГГ-ММ-ДД"); $("evD").focus(); break; }
+      if (end && !/^\d{4}-\d{2}-\d{2}$/.test(end)) { toast("Дата окончания в формате ГГГГ-ММ-ДД"); $("evE").focus(); break; }
+      if (end && end < date) { toast("Окончание не раньше даты начала"); $("evE").focus(); break; }
+      const prev = { title: ev.title, date: ev.date, end: ev.end || null };
+      Object.assign(ev, { title, date, end: end || null });
+      closeSheet(); render(true);
+      remote("event_edit", { key: ev.key, title, date, end }, "Событие обновлено",
+        () => { Object.assign(ev, prev); },
+        r => { if (r && r.date) { Object.assign(ev, { title: r.title, date: r.date, end: r.end || null }); render(true); } });
       break;
     }
     case "viewer-open": viewerSheet(); break;
@@ -1200,7 +1275,7 @@ case "nd-edit": {
       });
       break;
     }
-    case "card-del": if (S.owner) cardDelete(el.dataset.kind, el.dataset.key); break;
+    case "card-del": if (S.owner) { if (el.dataset.kind === "news") newsDelete(el.dataset.key); else cardDelete(el.dataset.kind, el.dataset.key); } break;
     case "undo-del": undoDelete(); break;
     case "projects-open": if (S.tab !== "team" && S.tab !== "meet" && S.tab !== "projects") S.prevTab = S.tab; S.tab = "projects"; closeSheet(); render(); break;
     case "news-open": store.set("news", String((D.digests || [])[0].id || "")); S.tab = "news"; closeSheet(); render(); break;
@@ -1444,8 +1519,9 @@ case "cal-day": {
       if (!list.length) break;
       const go = () => {
         list.forEach(y => { y.done = true; y.meeting = iso(today); }); render(true);
-        remote("agenda_done", { ids: list.map(y => y.id) }, list.length > 1 ? "Повестка закрыта" : "Отмечено: обсудили",
-          () => list.forEach(y => { y.done = false; y.meeting = null; }));
+        remote("agenda_done", { ids: list.map(y => y.id) }, list.length > 1 ? "Повестка закрыта, пункты в решениях" : "Обсудили, пункт в решениях",
+          () => list.forEach(y => { y.done = false; y.meeting = null; }),
+          () => refresh());
       };
       if (a === "ag-done-all") confirmAsk(`Отметить ${list.length} ${plural(list.length, ["тему", "темы", "тем"])} обсуждёнными?`, go); else go();
       break;
@@ -1660,6 +1736,11 @@ function decSave(key) {
   remote("dec_edit", { key, title: t, text: tx }, "Решение сохранено",
     () => { Object.assign(x, prev); render(true); });
 }
+function decGroups(dec) {
+  const m = {};
+  (dec.items || []).forEach(x => { const d = String(x.meeting || dec.date || "").slice(0, 10); (m[d] = m[d] || []).push(x); });
+  return Object.keys(m).sort().reverse().map(d => ({ d, items: m[d] }));
+}
 function decisionRow(x) {
   const who = x.handles && x.handles.length ? names(x.handles) : "", when = x.deadline ? "до " + fDay(dOnly(x.deadline)) : "";
   const draft = x.task ? `Черновик задачи: ${esc(x.task)}${who || when ? " · " + esc([who, when].filter(Boolean).join(", ")) : ""}` : "";
@@ -1686,7 +1767,7 @@ function renderMeet() {
       ${due.map(t => taskRow(t)).join("") || `<div class="empty">До встречи сроков нет.</div>`}</div></section>
     <section class="sec"><div class="sec-h"><span>Нужны руки · ${hands.length}</span>${hands.length ? `<button class="act" data-act="seg-go" data-seg="hands">Взять</button>` : ""}</div><div class="card">
       ${hands.slice(0, 5).map(h => `<div class="row"><div class="grow"><div class="t">${esc(h.title)}</div><div class="m">${esc([h.project, h.origin].filter(Boolean).join(" · "))}</div></div></div>`).join("") || `<div class="empty">Все задачи разобраны.</div>`}</div></section>
-    ${dec.items && dec.items.length ? `<section class="sec"><div class="sec-h"><span>Решения встречи${dec.date ? " " + fLong(dOnly(dec.date)) : ""}</span></div><div class="card">${dec.items.map(decisionRow).join("")}</div></section>` : ""}
+    ${decGroups(dec).map(g => `<section class="sec"><div class="sec-h"><span>Решения встречи${g.d ? " " + fLong(dOnly(g.d)) : ""}</span></div><div class="card">${g.items.map(decisionRow).join("")}</div></section>`).join("")}
     ${past.length ? `<section class="sec"><div class="sec-h"><span>Уже обсудили</span></div><div class="card">${past.map(x => `<div class="row"><div class="grow"><div class="t">${esc(x.text)}</div><div class="m">${esc(nm(x.by))}${x.meeting ? ", обсудили " + fDay(dOnly(x.meeting)) : ""}</div></div></div>`).join("")}</div></section>` : ""}
     <p class="foot">Повестка лежит на вкладке «Повестка» в таблице Лабы. Предложить тему может любой участник, убрать тему может её автор и Антон.</p>`;
 }
