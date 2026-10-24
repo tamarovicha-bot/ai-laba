@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- ai-laba build 2026-10-21 19:58-2 -->
+<!-- ai-laba build 2026-10-21 22:56 -->
 <html lang="ru">
 <head>
 <meta charset="utf-8">
@@ -567,8 +567,7 @@ function homeDecisions() {
   if (!dec || !dec.date || !dec.items || !dec.items.length) return "";
   const d = dOnly(dec.date);
   return `<section class="sec"><div class="sec-h"><span>Решено на встрече ${fLong(d)}</span></div>
-    <div class="card">${dec.items.map(x => `<div class="row"><div class="grow"><div class="t"><b>${esc(x.title)}</b></div>
-      <div class="m" style="color:var(--ink);opacity:.86">${esc(x.text)}</div><div class="links">${ext(x.links[0], "В чате")}</div></div></div>`).join("")}
+    <div class="card">${dec.items.map(decisionRow).join("")}
     </div></section>`;
 }
 function projRows() {
