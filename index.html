@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- ai-laba build 2026-10-25 12:03 -->
+<!-- ai-laba build 2026-10-25 12:21 -->
 <html lang="ru">
 <head>
 <meta charset="utf-8">
@@ -449,7 +449,8 @@ function header() {
   const meet = D && D.meeting, mt = $("meet");
   mt.hidden = !D || S.tab === "meet";
   const nAg = mt.hidden ? 0 : openAgenda().length;
-  mt.innerHTML = mt.hidden ? "" : `<button class="meet-t" data-act="meet-open">${esc(meet && meet.text ? meet.text : "Встреча Лабы")}<small>${nAg ? `Повестка: ${nAg} ${plural(nAg, ["тема", "темы", "тем"])}` : "Повестка встречи"} ›</small></button>${meet && meet.link ? `<a class="btn primary" href="${esc(meet.link)}" target="_blank" rel="noopener">Телемост</a>` : ""}`;
+  const md = meetDay();
+mt.innerHTML = mt.hidden ? "" : `<button class="meet-t" data-act="meet-open">${md.cancelled ? "Встречи не будет на этой неделе" : `${esc(meet && meet.text ? meet.text : "Встреча Лабы")}${md.moved ? " · перенесена" : ""}`}<small>${md.cancelled ? (S.owner ? "Вернуть как обычно ›" : "Регулярно по " + WD_FULL[md.date.getDay()] + " ›") : `${nAg ? `Повестка: ${nAg} ${plural(nAg, ["тема", "темы", "тем"])}` : "Повестка встречи"} ›`}</small></button>${md.cancelled ? "" : `${meet && meet.link ? `<a class="btn primary" href="${esc(meet.link)}" target="_blank" rel="noopener">Телемост</a>` : ""}`}`;
   const v = S.viewer;
   $("viewerBtn").innerHTML = v === "all"
     ? `<span class="ava all">Л</span><span>Вся Лаба</span><span class="caret">▾</span>`
@@ -1177,6 +1178,32 @@ case "nd-edit": {
         r => { if (r && r.date) { Object.assign(ev, { title: r.title, date: r.date, end: r.end || null }); render(true); } });
       break;
     }
+    case "meet-move": { if (!S.owner || !needViewer()) break; meetSheet(); break; }
+    case "meet-save": {
+      if (!S.owner || !needViewer()) break;
+      const m = meetDay(), date = ($("meetD").value || "").trim(), time = ($("meetTm").value || "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast("Дата в формате ГГГГ-ММ-ДД"); $("meetD").focus(); break; }
+      if (time && !/^\d{1,2}:\d{2}$/.test(time)) { toast("Время в формате ЧЧ:ММ"); $("meetTm").focus(); break; }
+      closeSheet();
+      const prev = D.meeting.overrides;
+      Object.assign(D.meeting.overrides = D.meeting.overrides || {}, { [m.week]: { date, time, cancelled: false } });
+      render(true);
+      remote("meeting_set", { week_of: m.week, date, time }, "Встреча перенесена",
+        () => { D.meeting.overrides = prev; }, r => { if (r && r.ok) render(true); });
+      break;
+    }
+    case "meet-cancel": case "meet-drop-week": case "meet-reset": {
+      if (!S.owner || !needViewer()) break;
+      const m = meetDay();
+      closeSheet();
+      const prev = D.meeting.overrides;
+      Object.assign(D.meeting.overrides = D.meeting.overrides || {}, { [m.week]: { date: "", time: "", cancelled: a !== "meet-reset" } });
+      render(true);
+      remote("meeting_set", { week_of: m.week, cancelled: a !== "meet-reset", reset: a === "meet-reset" },
+        a === "meet-reset" ? "Снова по расписанию" : "Встреча отменена на эту неделю",
+        () => { D.meeting.overrides = prev; }, r => { if (r && r.ok) render(true); });
+      break;
+    }
     case "viewer-open": viewerSheet(); break;
     case "viewer-set": S.viewer = el.dataset.h; S.viewerTouched = true; closeSheet(); if (S.viewer === "all" && S.seg === "mine") S.seg = "all"; render(); break;
     case "sheet-close": closeSheet(); break;
@@ -1590,7 +1617,24 @@ function meetDay() {
   const hit = WEEKDAYS.find(([re]) => re.test(text)), tm = text.match(/(\d{1,2})[:.](\d{2})/);
   let n = ((hit ? hit[1] : 0) - today.getDay() + 7) % 7;
   if (n === 0 && now.getHours() >= (tm ? Number(tm[1]) : 11) + 2) n = 7; // today's meeting is over
-  return { date: addDays(today, n), time: tm ? `${tm[1]}:${tm[2]}` : null, inDays: n };
+  const base = addDays(today, n);
+  const baseTm = tm ? `${tm[1]}:${tm[2]}` : null;
+  const o = ((D && D.meeting && D.meeting.overrides) || {})[iso(base)];
+  if (o && o.cancelled) return { date: base, time: baseTm, inDays: n, week: iso(base), cancelled: true };
+  if (o && o.date) {
+    const [y, mo, dy] = o.date.split("-").map(Number);
+    const d = new Date(y, mo - 1, dy);
+    return { date: d, time: o.time || baseTm, inDays: diff(today, d), week: iso(base), moved: true };
+  }
+  return { date: base, time: baseTm, inDays: n, week: iso(base) };
+}
+function meetSheet() {
+  const m = meetDay(); if (!S.owner || !needViewer()) return;
+  openSheet(`<h3>Перенести встречу</h3><p class="m" style="margin:-4px 0 14px">Сейчас по расписанию: ${fLong(m.date)}, ${m.time || "время по карточке чата"}</p>
+    <div class="fld"><span>Новая дата</span><input class="inp" type="date" id="meetD" value="${iso(m.date)}" min="${iso(today)}" max="${iso(addDays(today, 180))}"></div>
+    <div class="fld"><span>Время</span><input class="inp" type="time" id="meetTm" value="${m.time || ""}"></div>
+    <button class="btn wide primary" data-act="meet-save">Перенести</button>
+    <button class="btn wide" data-act="meet-drop-week">Отменить на эту неделю</button>`);
 }
 function duePresets() {
   const m = meetDay(), seen = new Set();
@@ -1754,12 +1798,13 @@ function renderMeet() {
   const m = meetDay(), ag = openAgenda(), past = (D.agenda || []).filter(x => x.done), me = S.me ? S.me.toLowerCase() : "";
   const due = D.tasks.filter(t => liveOf(t) && t.deadline && dOnly(t.deadline) <= m.date).sort((a, b) => (a.deadline < b.deadline ? -1 : 1));
   const hands = needsHands(), dec = D.decisions || { items: [] };
-  const when = m.inDays === 0 ? "сегодня" : m.inDays === 1 ? "завтра" : WD_FULL[m.date.getDay()];
+  const when = m.cancelled ? "" : (m.inDays === 0 ? "сегодня" : m.inDays === 1 ? "завтра" : WD_FULL[m.date.getDay()]);
+  const ovNote = m.moved ? `, перенесена с ${dmy(m.week)}` : "";
   const agRow = x => `<div class="row"><div class="grow"><div class="t">${esc(x.text)}</div><div class="m">${esc(nm(x.by))}${/^\d{4}-\d{2}-\d{2}/.test(x.at || "") ? ", " + fDay(dOnly(x.at)) : ""}${x.pending ? ", сохраняем…" : ""}</div></div>
     ${S.owner && !x.pending ? `<button class="btn mini" data-act="ag-done" data-ag="${esc(x.id)}">Обсудили</button>` : ""}
     ${S.owner && !x.pending ? `<button class="btn mini ico danger" data-act="ag-drop" data-ag="${esc(x.id)}" aria-label="Убрать из повестки" title="Убрать">✕</button>` : ""}</div>`;
-  return `<div class="h1"><b>Встреча Лабы</b>${D.meeting && D.meeting.link ? `<a class="btn primary" href="${esc(D.meeting.link)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Телемост</a>` : ""}</div>
-    <p class="m" style="margin:0 4px 14px">${esc(when)}, ${fLong(m.date)}${m.time ? ", " + m.time : ""}</p>
+  return `<div class="h1"><b>Встреча Лабы</b>${m.cancelled ? "" : `${D.meeting && D.meeting.link ? `<a class="btn primary" href="${esc(D.meeting.link)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Телемост</a>` : ""}`}${S.owner ? `<button class="btn mini" data-act="meet-move">Перенести</button>${m.cancelled ? `<button class="btn mini" data-act="meet-reset">Вернуть как обычно</button>` : `<button class="btn mini" data-act="meet-cancel">Отменить на эту неделю</button>`}` : ""}</div>
+    <p class="m" style="margin:0 4px 14px">${m.cancelled ? "На этой неделе встречи не будет." : `${esc(when)}, ${fLong(m.date)}${m.time ? ", " + m.time : ""}${ovNote}`}</p>
     <section class="sec"><div class="sec-h"><span>Повестка · ${ag.length}</span>${S.owner && ag.length ? `<button class="act" data-act="ag-done-all">Всё обсудили</button>` : ""}</div><div class="card">
       ${ag.map(agRow).join("") || `<div class="empty">Пока пусто. Предложи тему или вопрос к встрече.</div>`}
       <div class="ag-add"><textarea class="inp" id="agText" rows="1" maxlength="300" placeholder="Что обсудить на встрече?">${esc(S.agDraft || "")}</textarea><button class="btn primary" data-act="ag-add">Добавить</button></div></div></section>
@@ -1813,7 +1858,8 @@ function goBack() {
 function meetingsAhead(days) {
   if (!D || !D.meeting) return [];
   const m = meetDay(), n = openAgenda().length, out = [];
-  for (let d = m.date; diff(today, d) <= days; d = addDays(d, 7)) {
+  if (m.cancelled) return [];
+  for (let d = m.date; diff(today, d) <= days; d = addDays(d, m.moved && d === m.date ? 1 : 7)) {
     out.push({ kind: "lab", title: "Встреча Лабы", start: d, stop: d, meet: true,
       note: [m.time, d === m.date && n ? `тем в повестке: ${n}` : "Телемост"].filter(Boolean).join(", ") });
   }
