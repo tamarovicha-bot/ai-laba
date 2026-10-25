@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- ai-laba build 2026-10-21 22:56 -->
+<!-- ai-laba build 2026-10-24 23:05>
 <html lang="ru">
 <head>
 <meta charset="utf-8">
@@ -233,6 +233,8 @@ textarea.inp { resize: none; min-height: 44px; line-height: 1.35; }
 .inp::placeholder { color: var(--hint); }
 .chips.in { flex-wrap: wrap; overflow: visible; margin: 0; padding: 8px 0 0; }
 .btn.mini { flex: none; min-height: 30px; padding: 0 10px; font-size: 13px; }
+.btn.ico { width: 30px; padding: 0; font-size: 14px; color: var(--muted-foreground, #8a8f98); text-align: center; }
+.btn.ico.danger { color: #c0392b; }
 .ag-add { display: flex; gap: 8px; align-items: flex-end; padding: 10px 14px 12px; }
 .ag-add .inp { flex: 1; }
 button.meet-t { cursor: pointer; background: none; border: 0; padding: 0; text-align: left; font-family: inherit; }
@@ -1746,8 +1748,7 @@ function decisionRow(x) {
   return `<div class="row"><div class="grow"><div class="t"><b>${esc(x.title)}</b></div><div class="m" style="color:var(--ink);opacity:.86">${esc(x.text || "")}</div>
     ${x.made ? `<div class="draft">✓ В таблице: «${esc(x.made.title)}»</div>` : draft ? `<div class="draft">${draft}</div>` : ""}
     ${x.links && x.links[0] ? `<div class="links">${ext(x.links[0], "В чате")}</div>` : ""}</div>
-    ${S.owner && x.key && !x.made ? `<button class="btn mini" data-act="dec-task" data-k="${esc(x.key)}">В задачу</button>` : ""}
-    ${S.owner && x.key ? `<button class="btn mini" data-act="dec-edit" data-k="${esc(x.key)}">Изменить</button><button class="btn mini danger" data-act="dec-drop" data-k="${esc(x.key)}">Убрать</button>` : ""}</div>`;
+    ${S.owner && x.key ? `<button class="btn mini ico" data-act="dec-task" data-k="${esc(x.key)}" aria-label="В задачу" title="В задачу">▢</button><button class="btn mini ico" data-act="dec-edit" data-k="${esc(x.key)}" aria-label="Изменить" title="Изменить">✎</button><button class="btn mini ico danger" data-act="dec-drop" data-k="${esc(x.key)}" aria-label="Убрать" title="Убрать">✕</button>` : ""}</div>`;
 }
 function renderMeet() {
   const m = meetDay(), ag = openAgenda(), past = (D.agenda || []).filter(x => x.done), me = S.me ? S.me.toLowerCase() : "";
@@ -1756,7 +1757,7 @@ function renderMeet() {
   const when = m.inDays === 0 ? "сегодня" : m.inDays === 1 ? "завтра" : WD_FULL[m.date.getDay()];
   const agRow = x => `<div class="row"><div class="grow"><div class="t">${esc(x.text)}</div><div class="m">${esc(nm(x.by))}${/^\d{4}-\d{2}-\d{2}/.test(x.at || "") ? ", " + fDay(dOnly(x.at)) : ""}${x.pending ? ", сохраняем…" : ""}</div></div>
     ${S.owner && !x.pending ? `<button class="btn mini" data-act="ag-done" data-ag="${esc(x.id)}">Обсудили</button>` : ""}
-    ${!x.pending && (S.owner || (me && String(x.by).toLowerCase() === me)) ? `<button class="btn mini danger" data-act="ag-drop" data-ag="${esc(x.id)}" aria-label="Убрать из повестки">✕</button>` : ""}</div>`;
+    ${S.owner && !x.pending ? `<button class="btn mini ico danger" data-act="ag-drop" data-ag="${esc(x.id)}" aria-label="Убрать из повестки" title="Убрать">✕</button>` : ""}</div>`;
   return `<div class="h1"><b>Встреча Лабы</b>${D.meeting && D.meeting.link ? `<a class="btn primary" href="${esc(D.meeting.link)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Телемост</a>` : ""}</div>
     <p class="m" style="margin:0 4px 14px">${esc(when)}, ${fLong(m.date)}${m.time ? ", " + m.time : ""}</p>
     <section class="sec"><div class="sec-h"><span>Повестка · ${ag.length}</span>${S.owner && ag.length ? `<button class="act" data-act="ag-done-all">Всё обсудили</button>` : ""}</div><div class="card">
