@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- ai-laba build 2026-10-25 12:21 -->
+<!-- ai-laba build 2026-10-27 00:10 -->
 <html lang="ru">
 <head>
 <meta charset="utf-8">
@@ -102,7 +102,9 @@ html.standalone .phone { box-shadow: 0 24px 60px rgba(16, 26, 40, .22); border: 
 .empty { padding: 16px 14px; color: var(--hint); font-size: 14px; }
 
 /* pills and buttons */
-.pill { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .evbtns { display: flex; gap: 8px; justify-content: flex-end; align-items: center; margin-top: 8px; }
+  .evbtns .del { width: 30px; height: 30px; }
+  .pill { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .p-red { color: var(--red); background: var(--red-bg); }
 .p-amber { color: var(--amber); background: var(--amber-bg); }
 .p-green { color: var(--green); background: var(--green-bg); }
@@ -399,15 +401,12 @@ function bucket(t) {
   return n < 0 ? "overdue" : n === 0 ? "today" : n <= 7 ? "week" : "later";
 }
 function doneGrp(ts, label) {
-  const hid = store.get("dh") === "1"; // local choice, not account state
-  const hx = hiddenDone();
-  const vis = ts.filter(t => hx.indexOf(t.id) < 0);
-  if (!vis.length) return `<div class="grp">${label} <span class="m" style="font-weight:400;margin-left:4px">всё убрано.</span><button class="lnk" style="margin-left:6px" data-act="done-restore">вернуть скрытые</button></div>`;
-  return `<div class="grp tap" data-act="done-toggle">${label}${hid ? " (скрыто)" : ""} <span class="num">${vis.length}</span>`
+  if (!ts.length) return "";
+  const hid = store.get("dh") === "1"; // collapse of the whole group, nothing personal is hidden
+  return `<div class="grp tap" data-act="done-toggle">${label}${hid ? " (скрыто)" : ""} <span class="num">${ts.length}</span>`
     + `<span class="chev" style="margin-left:4px">${hid ? "‹" : "›"}</span></div>`
-    + (hid ? "" : `<div class="card">${vis.map(t => taskRow(t)).join("")}</div>`);
+    + (hid ? "" : `<div class="card">${ts.map(t => taskRow(t)).join("")}</div>`);
 }
-function hiddenDone() { return (store.get("dhx") || "").split(",").filter(Boolean); }
 const BUCKETS = [["overdue", "Просрочено"], ["today", "Сегодня"], ["week", "На неделе"], ["later", "Позже"], ["nodate", "Без срока"], ["paused", "На паузе"], ["done", "Сделано"]];
 function dueLabel(t) {
   if (!t.deadline) return null;
@@ -621,7 +620,8 @@ function renderHome() {
 
 /* ---------- tasks ---------- */
 function renderTasks() {
-  const mineN = S.viewer === "all" ? 0 : myTasks(S.viewer).length, hands = needsHands();
+  const live = t => !doneOf(t) && !pausedOf(t);
+  const mineN = S.viewer === "all" ? 0 : myTasks(S.viewer).filter(live).length, hands = needsHands();
   let body = "";
   if (S.seg === "hands") {
     body = `<div class="card" style="margin-top:12px"><div class="row tap" data-act="nt-open" data-assign="free"><div class="grow"><div class="t"><b>+ Попросить о помощи</b></div><div class="m">Задача без исполнителя попадёт в таблицу и сюда</div></div><span class="chev">›</span></div>${hands.map(h => `<div class="row"><div class="grow"><div class="t">${esc(h.title)}</div>
@@ -640,14 +640,14 @@ function renderTasks() {
       }).join("") || `<div class="card" style="margin-top:12px"><div class="empty">Задач нет.</div></div>`;
     }
   }
-  const projs = [...new Set(D.tasks.map(t => t.project))];
+  const projs = [...new Set(D.tasks.filter(t => live(t) && t.project).map(t => t.project))];
   return `<div class="h1"><b>Задачи</b><button class="btn mini" data-act="nt-open">+ Задача</button>${ext(D.meta.sheet_url, "Таблица").replace("<a ", '<a class="lnk" ')}</div>
     <div class="seg" role="group" aria-label="Фильтр задач">
-      <button data-act="seg" data-seg="all" aria-pressed="${S.seg === "all"}">Все <span class="num">${D.tasks.length}</span></button>
+      <button data-act="seg" data-seg="all" aria-pressed="${S.seg === "all"}">Все <span class="num">${D.tasks.filter(live).length}</span></button>
       <button data-act="seg" data-seg="mine" aria-pressed="${S.seg === "mine"}">Мои${S.viewer === "all" ? "" : ` <span class="num">${mineN}</span>`}</button>
       <button data-act="seg" data-seg="hands" aria-pressed="${S.seg === "hands"}">Нужны руки <span class="num">${hands.length}</span></button></div>
     ${S.seg !== "hands" ? `<div class="chips" role="group" aria-label="Проект"><button class="chip" data-act="proj" data-p="" aria-pressed="${!S.project}">Все проекты</button>
-      ${projs.map(p => `<button class="chip" data-act="proj" data-p="${esc(p)}" aria-pressed="${S.project === p}">${esc(p)}<span class="c">${D.tasks.filter(t => t.project === p).length}</span></button>`).join("")}</div>` : ""}
+      ${projs.map(p => `<button class="chip" data-act="proj" data-p="${esc(p)}" aria-pressed="${S.project === p}">${esc(p)}<span class="c">${D.tasks.filter(t => t.project === p && live(t)).length}</span></button>`).join("")}</div>` : ""}
     ${body}`;
 }
 
@@ -689,8 +689,9 @@ function renderCalendar() {
   const row = it => `<div class="row ${it.taskId || it.meet || it.point ? "tap" : ""}" ${it.taskId ? `data-act="task-open" data-id="${it.taskId}"` : it.meet ? 'data-act="meet-open"' : it.point ? `data-act="pt-open" data-id="${esc(it.pid)}"` : ""}>
     <div class="datecol">${it.end ? `<b class="rng">${it.start.getDate()}-${it.stop.getDate()}</b>` : `<b>${it.start.getDate()}</b>`}<small>${WD[it.start.getDay()]}</small></div>
     <div class="grow"><div class="t">${esc(it.title)}</div>${it.note ? `<div class="m">${esc(it.note)}</div>` : ""}
-    ${it.links || it.url ? `<div class="links">${it.links ? ext(it.links[0], "Источник в чате") : ""}${it.url ? ext(it.url, "Сайт") : ""}</div>` : ""}${evBlock(it)}${projLine(it)}</div>
-    <span class="pill ${KIND[it.kind][1]}">${KIND[it.kind][0]}</span>${S.owner && it.key && it.kind !== "task" ? (String(it.key).indexOf("nodate:") === 0 ? nodateRowBtn(it) : evRowBtns(it)) : ""}</div>`;
+    ${it.links || it.url ? `<div class="links">${it.links ? ext(it.links[0], "Источник в чате") : ""}${it.url ? ext(it.url, "Сайт") : ""}</div>` : ""}${evBlock(it)}${projLine(it)}
+    ${S.owner && it.key && it.kind !== "task" ? `<div class="evbtns">${String(it.key).indexOf("nodate:") === 0 ? nodateRowBtn(it) : evRowBtns(it)}</div>` : ""}</div>
+    <span class="pill ${KIND[it.kind][1]}">${KIND[it.kind][0]}</span></div>`;
   let html = `<div class="h1"><b>Календарь</b><button class="btn mini" data-act="pt-new" data-p="${esc(S.calProject || "")}">+ Точка</button></div><p class="lead">Встречи и вехи Лабы, точки проектов, сроки подачи и внешние события. Отмечай, где участвуешь; по срокам подачи можно сразу завести задачу.</p>
     <div class="chips" role="group" aria-label="Тип">${kinds.map(([k, l]) => `<button class="chip" data-act="cal" data-k="${k}" aria-pressed="${S.calKind === k}">${l}</button>`).join("")}</div>`;
   if (S.calProject) html += `<div class="chips" role="group" aria-label="Проект"><button class="chip" data-act="cal-proj" data-p="" aria-pressed="true">Проект «${esc(S.calProject)}» ✕</button></div>`;
@@ -906,7 +907,7 @@ function taskSheet(id) {
     ${pausedOf(t) ? `<p class="note" style="margin:0 0 10px">Задача на паузе: «Напоминатель» о ней молчит, в календаре, «Требует внимания» и «Нужны руки» её нет. Люди и срок сохранены.${S.owner ? "" : " Снять с паузы может Антон."}</p>` : ""}
     <div class="stack">${!mine && !isDone && !pausedOf(t) ? `<button class="btn primary wide" data-act="task-take" data-id="${t.id}">Беру</button>` : ""}
       <button class="btn wide" data-act="task-done" data-id="${t.id}">${isDone ? "Вернуть в работу" : "Готово"}</button>
-      ${isDone ? `<button class="btn wide" data-act="done-hide" data-id="${t.id}">Убрать из списка</button>` : ""}
+      ${S.owner && isDone ? `<button class="btn wide danger" data-act="task-del" data-id="${t.id}">Удалить</button>` : ""}
       ${S.owner && !isDone ? `<button class="btn wide" data-act="task-edit" data-id="${t.id}">Изменить</button>
       <button class="btn wide${pausedOf(t) ? " primary" : ""}" data-act="${pausedOf(t) ? "task-resume" : "task-pause"}" data-id="${t.id}">${pausedOf(t) ? "Возобновить" : "На паузу"}</button>` : ""}
       ${S.owner && !isDone && !pausedOf(t) ? `<button class="btn wide" data-act="due-open" data-id="${t.id}">${t.deadline ? "Перенести срок" : "Поставить срок"}</button>` : ""}
@@ -1111,17 +1112,16 @@ case "done-toggle": {
       render(true);
       break;
     }
-    case "done-hide": {
-      const hx = hiddenDone(); if (hx.indexOf(id) < 0) hx.push(id);
-      store.set("dhx", hx.join(","));
-      toast("Убрал из «Сделано»");
-      $("sheet").classList.contains("on") && closeSheet();
-      render(true);
-      break;
-    }
-    case "done-restore": {
-      store.set("dhx", "");
-      render(true);
+    case "task-del": {
+      const t2 = D.tasks.find(x => x.id === id);
+      if (!t2 || !S.owner || !needViewer()) break;
+      confirmAsk(`Удалить задачу «${t2.title}» для всех?`, () => {
+        const at = D.tasks.indexOf(t2);
+        if (at < 0) return;
+        D.tasks.splice(at, 1); render(true); haptic("warning");
+        remote("task_drop", { row: t2.row, title: t2.title, id: t2.id }, "Задача удалена",
+          () => { D.tasks.splice(Math.min(at, D.tasks.length), 0, t2); render(true); });
+      });
       break;
     }
 case "nd-edit": {
@@ -1467,11 +1467,15 @@ case "cal-day": {
     case "nt-open": if (needViewer()) newTaskSheet({ assign: el.dataset.assign || "me", project: S.tab === "tasks" ? S.project || "" : "" }); break;
     case "nt-due": { const f = $("ntDue"); if (f) f.value = el.dataset.d; break; }
     case "nt-save": {
-      const title = ($("ntTitle").value || "").replace(/\s+/g, " ").trim(), who = $("ntWho").value, due = $("ntDue").value || "";
+      const title = ($("ntTitle").value || "").replace(/\s+/g, " ").trim(), who = draftTask.assign, due = $("ntDue").value || "";
       if (title.length < 3) { toast("Напиши, что нужно сделать"); $("ntTitle").focus(); break; }
       if (due && due < iso(today)) { toast("Этот срок уже прошёл"); break; }
       const draft = Object.assign({}, draftTask, { title, project: $("ntProject").value, assign: who, deadline: due });
-      const payload = { title, project: draft.project, assign: who === "me" || who === "free" ? who : [who] };
+      const meLike = S.me ? "@" + S.me.toLowerCase() : "";
+      const payload = { title, project: draft.project,
+        assign: who === "me" ? "me"
+          : who === "free" ? "free"
+          : (who = who.map(h2 => h2 === "me" ? meLike : h2)).length === 1 && meLike && who[0].toLowerCase() === meLike ? "me" : who };
       if (due) payload.deadline = due;
       if (draft.decision) payload.decision = draft.decision;
       if (draft.event) payload.event = draft.event;
@@ -1485,6 +1489,7 @@ case "cal-day": {
         });
       break;
     }
+    case "nt-who": ntWhoPick(el.dataset.h); break;
     case "dec-task": {
       if (!needViewer()) break;
       const x = ((D.decisions && D.decisions.items) || []).find(y => y.key === el.dataset.k); if (!x) break;
@@ -1707,18 +1712,52 @@ function newTaskSheet(pre) {
   const projOf = name => { const x = D.projects.find(y => y.name === name || y.raw === name); return x ? (x.raw || x.name) : name; };
   const sel = projOf(p.project || ""), projs = [...new Set(D.projects.map(x => x.raw || x.name))];
   const mine = S.me ? S.me.toLowerCase() : "";
-  const who = [["me", "Беру сам(а)"], ["free", "Нужны руки: без исполнителя"]].concat(S.owner
-    ? D.people.filter(x => x.handle.toLowerCase() !== mine).map(x => [x.handle, `${x.name} ${x.handle}`]) : []);
-  if (S.owner && /^@/.test(p.assign) && !who.some(([v]) => v === p.assign)) who.push([p.assign, p.assign]);
+  const myH = "@" + mine;
+  const allH = [myH].concat(D.people.map(x => x.handle.toLowerCase() === mine ? [] : [x.handle]).filter(Boolean));
+  draftTask = Object.assign({}, p);
+  if (!Array.isArray(p.assign)) p.assign = p.assign === "free" ? "free" : "me";
+  const pick = Array.isArray(p.assign) ? p.assign : [];
+  const low = v => String(v).toLowerCase();
+  const on = v => (!Array.isArray(p.assign) && p.assign === "me" && v === "me") || pick.some(x => low(x) === low(v) || (low(x) === myH && v === "me"));
+  const allOn = pick.length === allH.length && allH.every(h => pick.some(x => low(x) === low(h)));
+  const freeOn = !Array.isArray(p.assign) ? p.assign === "free" : pick.length === 0;
+  const chipBtn = (v, label) => `<button class="chip" data-act="nt-who" data-h="${esc(v)}" aria-pressed="${v === "*" ? allOn : v === "free" ? freeOn : on(v)}">${esc(label)}</button>`;
+  const whoChips = chipBtn("*", "Все") + chipBtn("free", "Нужны руки")
+    + allH.map(h => { const n = D.people.find(x => low(x.handle) === low(h)); return chipBtn(h === myH ? "me" : h, h === myH ? "Я" : (n && n.name ? n.name : h)); }).join("");
   openSheet(`<h3>${p.decision ? "Задача по итогам встречи" : p.event ? "Заявка от Лабы" : "Новая задача"}</h3>
     <label class="fld"><span>Что сделать</span><textarea class="inp" id="ntTitle" rows="2" maxlength="200" placeholder="Например: собрать кейсы для доклада">${esc(p.title)}</textarea></label>
     <label class="fld"><span>Проект</span><select class="inp" id="ntProject"><option value="">Без проекта</option>${projs.map(x => `<option ${x === sel ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></label>
-    <label class="fld"><span>Кто</span><select class="inp" id="ntWho">${who.map(([v, l]) => `<option value="${esc(v)}" ${v === p.assign ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
+    <div class="fld"><span>Кто делает</span><div class="chips in">${whoChips}</div></div>
     <div class="fld"><span>Срок</span><input class="inp" type="date" id="ntDue" value="${esc(p.deadline)}" min="${iso(today)}" max="${iso(addDays(today, 365))}">
       <div class="chips in">${duePresets().map(o => `<button class="chip" data-act="nt-due" data-d="${o.iso}">${o.label}</button>`).join("")}<button class="chip" data-act="nt-due" data-d="">Без срока</button></div></div>
     <button class="btn primary wide" data-act="nt-save">Добавить в таблицу</button>
     <p class="note">Строка появится в «Таблице задач и проектов Лабы». ${S.owner ? "Назначить можно любого участника." : "Можно взять задачу себе или отдать в «Нужны руки»."}</p>`);
 }
+function ntWhoPick(h) {
+  if (!draftTask) return;
+  const low = v => String(v).toLowerCase(), myH = S.me ? "@" + S.me.toLowerCase() : "";
+  const allH = [myH].concat(D.people.map(x => low(x.handle) === low(S.me) ? [] : [x.handle]).filter(Boolean));
+  let a = Array.isArray(draftTask.assign) ? draftTask.assign.slice() : [];
+  if (h === "free") { draftTask.assign = "free"; }
+  else if (h === "*") {
+    const allOn = allH.every(v => a.some(x => low(x) === low(v)));
+    a = allOn ? [] : allH;
+  } else {
+    if (low(h) === "me") h = "me";
+    const hit = a.filter(x => low(x) === low(h) || (low(x) === low(myH) && h === "me") || (low(h) === low(myH) && low(x) === "me"));
+    if (hit.length) a = a.filter(x => hit.indexOf(x) < 0);
+    else a = a.concat([h === "me" && low(h) === low(myH) ? "me" : h]);
+  }
+  draftTask.assign = Array.isArray(a) && a.length ? a : "free";
+  ntSaveDraft(); ntSheetRefresh();
+}
+function ntSaveDraft() {
+  const t = $("ntTitle"), p2 = $("ntProject"), d2 = $("ntDue");
+  if (t) draftTask.title = t.value;
+  if (p2) draftTask.project = p2.value;
+  if (d2) draftTask.deadline = d2.value;
+}
+function ntSheetRefresh() { if ($("sheet").classList.contains("on")) closeSheet(); newTaskSheet(draftTask); }
 function markMade(key, r, title) {
   const x = ((D.decisions && D.decisions.items) || []).find(y => y.key === key);
   if (x) x.made = { row: r && r.row, title };
