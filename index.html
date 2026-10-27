@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- ai-laba build 2026-10-27 00:10 -->
+<!-- ai-laba build 2026-10-27 16:11 -->
 <html lang="ru">
 <head>
 <meta charset="utf-8">
@@ -1475,7 +1475,7 @@ case "cal-day": {
       const payload = { title, project: draft.project,
         assign: who === "me" ? "me"
           : who === "free" ? "free"
-          : (who = who.map(h2 => h2 === "me" ? meLike : h2)).length === 1 && meLike && who[0].toLowerCase() === meLike ? "me" : who };
+          : (who2 = Array.isArray(who) ? who.map(h2 => h2 === "me" ? meLike : h2) : who) && Array.isArray(who2) && who2.length === 1 && meLike && who2[0].toLowerCase() === meLike ? "me" : who2 };
       if (due) payload.deadline = due;
       if (draft.decision) payload.decision = draft.decision;
       if (draft.event) payload.event = draft.event;
@@ -1712,11 +1712,11 @@ function newTaskSheet(pre) {
   const projOf = name => { const x = D.projects.find(y => y.name === name || y.raw === name); return x ? (x.raw || x.name) : name; };
   const sel = projOf(p.project || ""), projs = [...new Set(D.projects.map(x => x.raw || x.name))];
   const mine = S.me ? S.me.toLowerCase() : "";
-  const myH = "@" + mine;
-  const allH = [myH].concat(D.people.map(x => x.handle.toLowerCase() === mine ? [] : [x.handle]).filter(Boolean));
+  const myH = S.me ? (S.me[0] === "@" ? S.me.toLowerCase() : "@" + S.me.toLowerCase()) : "";
+  const allH = [myH].concat(D.people.map(x => x.handle.toLowerCase() === mine ? null : x.handle).filter(Boolean));
   draftTask = Object.assign({}, p);
-  if (!Array.isArray(p.assign)) p.assign = p.assign === "free" ? "free" : "me";
-  const pick = Array.isArray(p.assign) ? p.assign : [];
+  if (!Array.isArray(p.assign)) { if (!(p.assign === "free" || /^@/.test(String(p.assign)))) p.assign = "me"; }
+  const pick = Array.isArray(p.assign) ? p.assign : (/^@/.test(String(p.assign)) ? [String(p.assign)] : []);
   const low = v => String(v).toLowerCase();
   const on = v => (!Array.isArray(p.assign) && p.assign === "me" && v === "me") || pick.some(x => low(x) === low(v) || (low(x) === myH && v === "me"));
   const allOn = pick.length === allH.length && allH.every(h => pick.some(x => low(x) === low(h)));
@@ -1735,8 +1735,8 @@ function newTaskSheet(pre) {
 }
 function ntWhoPick(h) {
   if (!draftTask) return;
-  const low = v => String(v).toLowerCase(), myH = S.me ? "@" + S.me.toLowerCase() : "";
-  const allH = [myH].concat(D.people.map(x => low(x.handle) === low(S.me) ? [] : [x.handle]).filter(Boolean));
+  const low = v => String(v).toLowerCase(), myH = S.me ? (S.me[0] === "@" ? S.me.toLowerCase() : "@" + S.me.toLowerCase()) : "";
+  const allH = [myH].concat(D.people.map(x => low(x.handle) === low(S.me) ? null : x.handle).filter(Boolean));
   let a = Array.isArray(draftTask.assign) ? draftTask.assign.slice() : [];
   if (h === "free") { draftTask.assign = "free"; }
   else if (h === "*") {
