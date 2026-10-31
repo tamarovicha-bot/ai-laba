@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- ai-laba build 2026-10-27 16:11 -->
+<!-- ai-laba build 2026-10-31 13:17 -->
 <html lang="ru">
 <head>
 <meta charset="utf-8">
@@ -1178,6 +1178,8 @@ case "nd-edit": {
         r => { if (r && r.date) { Object.assign(ev, { title: r.title, date: r.date, end: r.end || null }); render(true); } });
       break;
     }
+    case "meet-ann": meetAnnounce(); break;
+    case "meet-copy": annCopy(); break;
     case "meet-move": { if (!S.owner || !needViewer()) break; meetSheet(); break; }
     case "meet-save": {
       if (!S.owner || !needViewer()) break;
@@ -1633,6 +1635,34 @@ function meetDay() {
   }
   return { date: base, time: baseTm, inDays: n, week: iso(base) };
 }
+function meetAnnText() {
+  const m = meetDay(), ag = openAgenda();
+  const mine = S.me ? (S.me[0] === "@" ? S.me.toLowerCase() : "@" + S.me.toLowerCase()) : "";
+  const hs = [mine].concat((D.people || []).map(x => x.handle).filter(h => h && h.toLowerCase() !== mine));
+  const lines = [`Встреча Лабы в это воскресенье, ${fLong(m.date)}, в ${m.time || "11:00"}.`];
+  if (ag.length) lines.push("", "Повестка:");
+  ag.forEach(function (x, i) { lines.push(`${i + 1}. ${x.text}`); });
+  if (D.meeting && D.meeting.link) lines.push("", `Телемост: ${D.meeting.link}`);
+  if (hs.length) lines.push("", hs.join(" "));
+  return lines.join("\n");
+}
+function meetAnnounce() {
+  if (!S.owner) return;
+  const m = meetDay(); if (m.cancelled) return;
+  const txt = meetAnnText();
+  openSheet(`<h3>Анонс встречи</h3><p class="m" style="margin:-4px 0 12px">${esc(fLong(m.date))}, ${esc(m.time || "11:00")}. Скопируй и вставь в чат Лабы.</p>
+    <textarea class="inp" id="annText" rows="12" readonly>${esc(txt)}</textarea>
+    <button class="btn primary wide" data-act="meet-copy">Скопировать</button>
+    <p class="note">Дата, повестка и ссылка берутся из портала. Добавил тему, нажми «Анонс» ещё раз.</p>`);
+}
+function annCopy() {
+  const el = $("annText"); if (!el) return;
+  const done = function () { toast("Анонс скопирован, вставь в чат"); };
+  try { el.focus(); el.select(); } catch (e) {}
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(el.value).then(done, function () { try { document.execCommand("copy"); } catch (e) {} done(); });
+  } else { try { document.execCommand("copy"); } catch (e) {} done(); }
+}
 function meetSheet() {
   const m = meetDay(); if (!S.owner || !needViewer()) return;
   openSheet(`<h3>Перенести встречу</h3><p class="m" style="margin:-4px 0 14px">Сейчас по расписанию: ${fLong(m.date)}, ${m.time || "время по карточке чата"}</p>
@@ -1842,7 +1872,7 @@ function renderMeet() {
   const agRow = x => `<div class="row"><div class="grow"><div class="t">${esc(x.text)}</div><div class="m">${esc(nm(x.by))}${/^\d{4}-\d{2}-\d{2}/.test(x.at || "") ? ", " + fDay(dOnly(x.at)) : ""}${x.pending ? ", сохраняем…" : ""}</div></div>
     ${S.owner && !x.pending ? `<button class="btn mini" data-act="ag-done" data-ag="${esc(x.id)}">Обсудили</button>` : ""}
     ${S.owner && !x.pending ? `<button class="btn mini ico danger" data-act="ag-drop" data-ag="${esc(x.id)}" aria-label="Убрать из повестки" title="Убрать">✕</button>` : ""}</div>`;
-  return `<div class="h1"><b>Встреча Лабы</b>${m.cancelled ? "" : `${D.meeting && D.meeting.link ? `<a class="btn primary" href="${esc(D.meeting.link)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Телемост</a>` : ""}`}${S.owner ? `<button class="btn mini" data-act="meet-move">Перенести</button>${m.cancelled ? `<button class="btn mini" data-act="meet-reset">Вернуть как обычно</button>` : `<button class="btn mini" data-act="meet-cancel">Отменить на эту неделю</button>`}` : ""}</div>
+  return `<div class="h1"><b>Встреча Лабы</b>${m.cancelled ? "" : `${D.meeting && D.meeting.link ? `<a class="btn primary" href="${esc(D.meeting.link)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Телемост</a>` : ""}`}${S.owner ? `<button class="btn mini" data-act="meet-ann">Анонс</button><button class="btn mini" data-act="meet-move">Перенести</button>${m.cancelled ? `<button class="btn mini" data-act="meet-reset">Вернуть как обычно</button>` : `<button class="btn mini" data-act="meet-cancel">Отменить на эту неделю</button>`}` : ""}</div>
     <p class="m" style="margin:0 4px 14px">${m.cancelled ? "На этой неделе встречи не будет." : `${esc(when)}, ${fLong(m.date)}${m.time ? ", " + m.time : ""}${ovNote}`}</p>
     <section class="sec"><div class="sec-h"><span>Повестка · ${ag.length}</span>${S.owner && ag.length ? `<button class="act" data-act="ag-done-all">Всё обсудили</button>` : ""}</div><div class="card">
       ${ag.map(agRow).join("") || `<div class="empty">Пока пусто. Предложи тему или вопрос к встрече.</div>`}
