@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- ai-laba build 2026-10-31 13:17 -->
+<!-- ai-laba build 2026-10-31 13:39 -->
 <html lang="ru">
 <head>
 <meta charset="utf-8">
@@ -626,7 +626,7 @@ function renderTasks() {
   if (S.seg === "hands") {
     body = `<div class="card" style="margin-top:12px"><div class="row tap" data-act="nt-open" data-assign="free"><div class="grow"><div class="t"><b>+ Попросить о помощи</b></div><div class="m">Задача без исполнителя попадёт в таблицу и сюда</div></div><span class="chev">›</span></div>${hands.map(h => `<div class="row"><div class="grow"><div class="t">${esc(h.title)}</div>
       <div class="m">${esc(h.project)} · ${esc(h.origin)}</div>${h.link ? `<div class="links">${ext(h.link, "Открыть в чате")}</div>` : ""}</div>
-      <button class="btn primary" data-act="${h.kind === "task" ? "task-take" : "ask-take"}" data-id="${h.id}">Беру</button></div>`).join("") || `<div class="empty">Все задачи разобраны.</div>`}</div>`;
+      <button class="btn primary" data-act="${h.kind === "task" ? "task-take" : "ask-take"}" data-id="${h.id}">Беру</button>${S.owner && h.kind === "task" ? `<button class="btn mini ico danger" data-act="task-del" data-id="${h.id}" aria-label="Удалить задачу" title="Удалить">✕</button>` : ""}</div>`).join("") || `<div class="empty">Все задачи разобраны.</div>`}</div>`;
   } else {
     let list = S.seg === "mine" ? (S.viewer === "all" ? [] : myTasks(S.viewer)) : D.tasks.slice();
     if (S.project) list = list.filter(t => t.project === S.project);
@@ -907,7 +907,7 @@ function taskSheet(id) {
     ${pausedOf(t) ? `<p class="note" style="margin:0 0 10px">Задача на паузе: «Напоминатель» о ней молчит, в календаре, «Требует внимания» и «Нужны руки» её нет. Люди и срок сохранены.${S.owner ? "" : " Снять с паузы может Антон."}</p>` : ""}
     <div class="stack">${!mine && !isDone && !pausedOf(t) ? `<button class="btn primary wide" data-act="task-take" data-id="${t.id}">Беру</button>` : ""}
       <button class="btn wide" data-act="task-done" data-id="${t.id}">${isDone ? "Вернуть в работу" : "Готово"}</button>
-      ${S.owner && isDone ? `<button class="btn wide danger" data-act="task-del" data-id="${t.id}">Удалить</button>` : ""}
+      ${S.owner && (isDone || !hs.length) ? `<button class="btn wide danger" data-act="task-del" data-id="${t.id}">Удалить</button>` : ""}
       ${S.owner && !isDone ? `<button class="btn wide" data-act="task-edit" data-id="${t.id}">Изменить</button>
       <button class="btn wide${pausedOf(t) ? " primary" : ""}" data-act="${pausedOf(t) ? "task-resume" : "task-pause"}" data-id="${t.id}">${pausedOf(t) ? "Возобновить" : "На паузу"}</button>` : ""}
       ${S.owner && !isDone && !pausedOf(t) ? `<button class="btn wide" data-act="due-open" data-id="${t.id}">${t.deadline ? "Перенести срок" : "Поставить срок"}</button>` : ""}
@@ -1179,6 +1179,7 @@ case "nd-edit": {
       break;
     }
     case "meet-ann": meetAnnounce(); break;
+    case "meet-send": annSend(); break;
     case "meet-copy": annCopy(); break;
     case "meet-move": { if (!S.owner || !needViewer()) break; meetSheet(); break; }
     case "meet-save": {
@@ -1650,10 +1651,19 @@ function meetAnnounce() {
   if (!S.owner) return;
   const m = meetDay(); if (m.cancelled) return;
   const txt = meetAnnText();
-  openSheet(`<h3>Анонс встречи</h3><p class="m" style="margin:-4px 0 12px">${esc(fLong(m.date))}, ${esc(m.time || "11:00")}. Скопируй и вставь в чат Лабы.</p>
-    <textarea class="inp" id="annText" rows="12" readonly>${esc(txt)}</textarea>
-    <button class="btn primary wide" data-act="meet-copy">Скопировать</button>
-    <p class="note">Дата, повестка и ссылка берутся из портала. Добавил тему, нажми «Анонс» ещё раз.</p>`);
+  openSheet(`<h3>Анонс встречи</h3><p class="m" style="margin:-4px 0 12px">${esc(fLong(m.date))}, ${esc(m.time || "11:00")}. Проверь текст и отправь в чат Лабы.</p>
+    <textarea class="inp" id="annText" rows="12">${esc(txt)}</textarea>
+    <button class="btn primary wide" data-act="meet-send">Отправить в чат</button>
+    <button class="btn wide" data-act="meet-copy">Скопировать</button>
+    <p class="note">Сообщение уйдёт в общий чат AI laba от «Напоминателя». Дата, повестка и ссылка берутся из портала, текст можно поправить перед отправкой.</p>`);
+}
+function annSend() {
+  if (!S.owner) return;
+  const el = $("annText"); if (!el) return;
+  const txt = String(el.value || "").trim();
+  if (!txt) { toast("Анонс пустой"); return; }
+  closeSheet();
+  remote("announce", { text: txt }, "Анонс отправлен в чат", function () { meetAnnounce(); });
 }
 function annCopy() {
   const el = $("annText"); if (!el) return;
